@@ -11,6 +11,7 @@ from typing_extensions import TypedDict
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.runtime import Runtime
+from langchain_core.runnables import RunnableConfig
 
 # -------------------
 #  Import Constants
@@ -40,8 +41,14 @@ class State(TypedDict):
     See: https://langchain-ai.github.io/langgraph/concepts/low_level/#state
     """
 
-    # The bug report or error stack trace
+    # The issue id, if there is one
+    issue_id: Optional[int]
+
+    # The bug report, issue description, or error stack trace
     issue_description: str
+
+    # The repository path
+    repo_path: str
 
     # Paths and code snippets from repo
     relevant_files: List[str]
@@ -100,7 +107,7 @@ async def evaluator(state: State, runtime: Runtime[Context]):
 # ---------------------------
 #  Coder PR Writer Function
 # ---------------------------
-async def pr_writer(state: State, runtime: Runtime[Context]):
+async def pr_writer(state: State, runtime: Runtime[Context], config: RunnableConfig):
     return ("Placeholder")
 
 # ------------------------
@@ -161,4 +168,4 @@ graph.add_edge("PR Writer", END)
 # ---------------------
 #  Compile the Graph
 # ---------------------
-graph = graph.compile()
+app = graph.compile()
