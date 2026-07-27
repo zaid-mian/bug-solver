@@ -5,6 +5,7 @@
 
 from abc import ABC, abstractmethod
 
+
 class BaseGitHubClient(ABC):
     @abstractmethod
     def get_issue(self, issue_number: int) -> dict:
@@ -13,7 +14,7 @@ class BaseGitHubClient(ABC):
 
     @abstractmethod
     def create_pull_request(
-            self, title: str, body: str, head_branch: str, base_branch: str = "main"
+        self, title: str, body: str, head_branch: str, base_branch: str = "main"
     ) -> str:
         """Opens a Pull Request and returns the PR URL."""
         pass

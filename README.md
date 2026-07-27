@@ -1,61 +1,131 @@
-# New LangGraph Project
+# Bug Solver Agent
 
-[![CI](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/unit-tests.yml)
-[![Integration Tests](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/langchain-ai/new-langgraph-project/actions/workflows/integration-tests.yml)
+A CLI-driven, autonomous **bug-fixing agent** built on [LangGraph](https://github.com/langchain-ai/langgraph). Point it at a local repository (or a GitHub issue), and it plans a fix, writes the code, runs the tests, evaluates the result, and — optionally — commits, pushes, and opens a Pull Request.
 
-This template demonstrates a simple application implemented using [LangGraph](https://github.com/langchain-ai/langgraph), designed for showing how to get started with [LangGraph Server](https://langchain-ai.github.io/langgraph/concepts/langgraph_server/#langgraph-server) and using [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/), a visual debugging IDE.
+> ⚠️ **Work in progress.** The graph topology, CLI, adapter interfaces, and state schema are in place. Several node implementations, tool wrappers, and skill prompts are still scaffolding/placeholders.
 
-<div align="center">
-  <img src="./static/studio_ui.png" alt="Graph view in LangGraph studio UI" width="75%" />
-</div>
+## How it works
 
-The core logic defined in `src/agent/graph.py`, showcases an single-step application that responds with a fixed string and the configuration provided.
+The agent is a LangGraph state machine with five nodes and a feedback loop:
 
-You can extend this graph to orchestrate more complex agentic workflows that can be visualized and debugged in LangGraph Studio.
+```
+START → Planner → Coder → Test Runner → Evaluator ─┬─ (success) ──→ PR Writer → END
+                    ▲                               ├─ (failed)  ──→ Coder
+                    │                               └─ (retries  ──→ Planner
+                    └───────────────────────────────   exceeded)
+```
 
-## Getting Started
+- **Planner** — analyzes the issue/bug description and locates relevant files, producing a fix plan.
+- **Coder** — generates the code patch for the plan.
+- **Test Runner** — runs the test suite and captures output.
+- **Evaluator** — inspects test results and decides the next step via `check_status`:
+  - `SUCCESS` → move on to **PR Writer**
+  - `FAILED` → loop back to **Coder** to try again
+  - retry count exceeds `MAX_RETRIES` → loop back to **Planner** to re-plan
+- **PR Writer** — commits, pushes, and opens the Pull Request (when not in local-only mode).
 
-1. Install dependencies, along with the [LangGraph CLI](https://langchain-ai.github.io/langgraph/concepts/langgraph_cli/), which will be used to run the server.
+The graph is defined in [src/agent/graph.py](src/agent/graph.py). Shared constants (`MAX_RETRIES`, the `Status` enum) live in [src/constants.py](src/constants.py).
+
+### State
+
+The workflow state ([`State`](src/agent/graph.py)) tracks the issue id/description, repo path, relevant files, the fix plan, the generated patch, test output, a retry counter, and the current `Status`.
+
+## Architecture
+
+The agent talks to the outside world (Git, the filesystem, GitHub) through **adapter interfaces**, so the underlying implementation can be swapped without touching node logic.
+
+```
+src/
+├── agent/
+│   └── graph.py            # LangGraph nodes, edges, and conditional routing
+├── adapters/               # Pluggable interfaces to the outside world
+│   ├── git/                # Local Git operations
+│   │   ├── base.py         #   BaseGitRepo abstract interface
+│   │   ├── types.py        #   GitResult / GitOpStatus typed results
+│   │   ├── SubprocessGitManager.py   # concrete impl via `subprocess`
+│   │   └── GitPythonManager.py       # concrete impl via GitPython
+│   ├── filesystem/         # Local filesystem operations (read/write/find/list)
+│   │   └── base.py         #   BaseFileSystemTools abstract interface
+│   └── platform/           # Web platform (GitHub) operations
+│       └── base.py         #   BaseGitHubClient abstract interface
+├── skills/                 # Per-node prompts and templated tool responses
+│   ├── planner/            #   SKILL.md + responses/*.md templates
+│   ├── coder/
+│   ├── evaluator/
+│   ├── test_runner/
+│   └── pr_writer/
+├── tools/                  # LangChain tool wrappers over the adapters
+├── utils/
+│   └── template_loader.py  # loads a `##` section from a skill response .md
+├── constants.py
+└── cli.py                  # Typer CLI entrypoint
+```
+
+### Adapters
+
+Each adapter domain exposes an abstract base class that the graph depends on:
+
+- **`BaseGitRepo`** — `checkout_branch`, `apply_patch_or_commit`, `push`, `search_repo_text`. Operations return a typed `GitResult(status: GitOpStatus, raw_data, error_details)` so nodes can branch on rich, structured outcomes (e.g. `BRANCH_EXISTS_REMOTELY`, `ALREADY_ON_BRANCH`, `MERGE_CONFLICT`). `SubprocessGitManager` implements this with the `git` CLI; `GitPythonManager` is a GitPython-based alternative.
+- **`BaseFileSystemTools`** — `read_file`, `write_files`, `find_files`, `list_dir`.
+- **`BaseGitHubClient`** — `get_issue`, `create_pull_request`, `post_issue_comment`.
+
+### Skills & templated responses
+
+Each node has a `skills/<node>/SKILL.md` prompt. Tools can return human/agent-readable responses rendered from markdown templates under `skills/<node>/responses/`. [template_loader.py](src/utils/template_loader.py) extracts a named `##` section from those files — for example, [planner/responses/branch_checkout.md](src/skills/planner/responses/branch_checkout.md) maps each `GitOpStatus` to an explanatory message the agent can act on.
+
+## CLI
+
+The entrypoint is a [Typer](https://typer.tiangolo.com/) app in [src/cli.py](src/cli.py). The `run` command takes a **target** — either a numeric GitHub issue number or a prose bug description — resolves the repository, wires up the Git/GitHub managers, and invokes the graph.
 
 ```bash
-cd path/to/your/app
+# Mode 1: Fetch issue #142 from GitHub, fix locally, push & open a PR
+bugsolver run 142 --pr
+
+# Mode 2: Fix a local bug described in prose, local-only (no push/PR)
+bugsolver run "Fix memory leak in parser" --local-only
+
+# Mode 3: Keep changes local without pushing
+bugsolver run 142 --local-only
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--path`, `-p` | current repo root | Path to the local repository. |
+| `--new-branch / --no-new-branch` | `--new-branch` | Create a new branch vs. use the current one. |
+| `--pr / --no-pr` | `--pr` | Automatically open a Pull Request on GitHub. |
+| `--local-only` | `False` | Keep changes local (no push/PR). |
+
+The GitHub client is only wired up when a `GITHUB_TOKEN` environment variable is present.
+
+## Getting started
+
+1. Install dependencies, along with the [LangGraph CLI](https://langchain-ai.github.io/langgraph/concepts/langgraph_cli/):
+
+```bash
+cd path/to/bug-solver
 pip install -e . "langgraph-cli[inmem]"
 ```
 
-2. (Optional) Customize the code and project as needed. Create a `.env` file if you need to use secrets.
+2. Create a `.env` file for secrets:
 
 ```bash
 cp .env.example .env
 ```
 
-If you want to enable LangSmith tracing, add your LangSmith API key to the `.env` file.
-
 ```text
 # .env
-LANGSMITH_API_KEY=lsv2...
+GITHUB_TOKEN=ghp_...          # required for issue fetching / PR creation
+LANGSMITH_API_KEY=lsv2...     # optional, enables LangSmith tracing
 ```
 
-3. Start the LangGraph Server.
+3. Iterate on the graph in [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/):
 
-```shell
+```bash
 langgraph dev
 ```
 
-For more information on getting started with LangGraph Server, [see here](https://langchain-ai.github.io/langgraph/tutorials/langgraph-platform/local-server/).
-
-## How to customize
-
-1. **Define runtime context**: Modify the `Context` class in the `graph.py` file to expose the arguments you want to configure per assistant. For example, in a chatbot application you may want to define a dynamic system prompt or LLM to use. For more information on runtime context in LangGraph, [see here](https://langchain-ai.github.io/langgraph/agents/context/?h=context#static-runtime-context).
-
-2. **Extend the graph**: The core logic of the application is defined in [graph.py](./src/agent/graph.py). You can modify this file to add new nodes, edges, or change the flow of information.
-
 ## Development
 
-While iterating on your graph in LangGraph Studio, you can edit past state and rerun your app from previous states to debug specific nodes. Local changes will be automatically applied via hot reload.
-
-Follow-up requests extend the same thread. You can create an entirely new thread, clearing previous history, using the `+` button in the top right.
-
-For more advanced features and examples, refer to the [LangGraph documentation](https://langchain-ai.github.io/langgraph/). These resources can help you adapt this template for your specific use case and build more sophisticated conversational agents.
-
-LangGraph Studio also integrates with [LangSmith](https://smith.langchain.com/) for more in-depth tracing and collaboration with teammates, allowing you to analyze and optimize your chatbot's performance.
-
+While iterating in LangGraph Studio, you can edit past state and re-run from previous states to debug specific nodes; local changes hot-reload. For more, see the [LangGraph documentation](https://langchain-ai.github.io/langgraph/).
