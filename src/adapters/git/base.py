@@ -26,6 +26,11 @@ class BaseGitRepo(ABC):
         pass
 
     @abstractmethod
+    def pull(self, branch_name: str, remote: str = "origin") -> GitResult:
+        """Pulls remote branch to current branch."""
+        pass
+
+    @abstractmethod
     def search_repo_text(self, text_pattern: str) -> GitResult:
         """Performs semantic keyword, symbol, or error string searches"""
         pass
