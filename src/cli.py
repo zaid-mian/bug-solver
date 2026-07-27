@@ -12,13 +12,13 @@ from agent.graph import app
 # ----------------------
 '''
 # Mode 1: Fetch issue from GitHub, fix locally, push & PR
-bugsolver run --issue 142 --auto-pr
+bugsolver run 142 --auto-pr
 
 # Mode 2: Fix a local bug described in prose or a file, local-only (no PR)
 bugsolver run "Fix memory leak in parser" --local-only
 
 # Mode 3: Dry-run mode (make code changes locally, but don't commit/push)
-bugsolver run --issue 142 --dry-run
+bugsolver run 142 --dry-run
 '''
 
 # -----------------------

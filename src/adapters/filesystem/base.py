@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 import os
 from pathlib import Path
 
+
 class BaseFileSystemTools(ABC):
     @abstractmethod
     def read_file(self, file_path: str | os.PathLike | Path) -> str:
