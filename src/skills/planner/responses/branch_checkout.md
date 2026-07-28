@@ -32,7 +32,7 @@ Created and switched to a new branch `{branch_name}`.
 
 # subprocess_error
 
-Ran into a CalledProcessError when attempting to switch or creating a new branch, with branch name `{branch_name}`, using subprocess.
+Ran into a CalledProcessError when attempting to switch or creating a new branch, with branch name `{branch_name}`.
 
 The error details:
 raw_data: `{raw_data}`

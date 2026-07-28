@@ -30,7 +30,7 @@ Error details:
 
 ## subprocess_error
 
-Ran into a CalledProcessError when attempting to run escape hatch/fallback command tool, using subprocess.
+Ran into a CalledProcessError when attempting to run escape hatch/fallback command tool.
 
 The command arguments:
 `{args_str}`

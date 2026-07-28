@@ -4,12 +4,12 @@
 
 Successfully ran the git_status command.
 
-Status result (raw_data):
-`{raw_data}`
+Status result:
+`{status_result}`
 
 ## merge_conflict
 
-When checking the status of the branch `{branch_name}` with the remote `{remote}` branch `{branch_name}` Git determined there would be a merge conflict due to unmerged files.
+When checking the status Git determined there would be a merge conflict due to unmerged files.
 
 Error details:
 raw_data: `{raw_data}`
@@ -19,7 +19,7 @@ _Action Required: Most likely will need to deal with unmerged files, so may need
 
 ## subprocess_error
 
-Ran into a CalledProcessError when attempting to run git status for branch `{branch_name}`, using subprocess.
+Ran into a CalledProcessError when attempting to run git status.
 
 The error details:
 raw_data: `{raw_data}`

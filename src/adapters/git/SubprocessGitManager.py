@@ -23,7 +23,12 @@ class SubprocessGitManager(BaseGitRepo):
                 text=True,
                 check=True,
             )
-            return [line.strip() for line in result.stdout.split("\n") if line.strip()]
+            return GitResult(
+                status=GitOpStatus.LISTED_BRANCHES,
+                raw_data=[
+                    line.strip() for line in result.stdout.split("\n") if line.strip()
+                ],
+            )
 
         except subprocess.CalledProcessError as e:
             return GitResult(
@@ -43,7 +48,7 @@ class SubprocessGitManager(BaseGitRepo):
         """
         if not create_new:
             # get all branches on local git
-            local_branches = self.list_local_branches()
+            local_branches = self.list_local_branches().raw_data
 
             # first check if it exists at all
             if branch_name in local_branches:
@@ -129,7 +134,7 @@ class SubprocessGitManager(BaseGitRepo):
                 if branch_name in all_branches.stdout.strip():
                     return GitResult(
                         status=GitOpStatus.BRANCH_EXISTS_REMOTELY,
-                        raw_data=all_branches,
+                        raw_data=all_branches.stdout.strip(),
                         error_details=f"Branch '{branch_name}' exists outside the developer's local repo, should not use this branch or it's name.",
                     )
 
@@ -190,7 +195,7 @@ class SubprocessGitManager(BaseGitRepo):
             if branch_name in all_branches.stdout.strip():
                 return GitResult(
                     GitOpStatus.BRANCH_ALREADY_EXISTS,
-                    raw_data=all_branches,
+                    raw_data=all_branches.stdout.strip(),
                     error_details=f"Branch '{branch_name}' already exists",
                 )
 
@@ -252,10 +257,8 @@ class SubprocessGitManager(BaseGitRepo):
                 return GitResult(
                     status=GitOpStatus.GITIGNORE_ERROR,
                     raw_data=e,
-                    error_details={
-                        "raw_error": e.stderr,
-                        "ignored_files": ignored_files,
-                    },
+                    error_details=e.stderr,
+                    ignored_files=ignored_files,
                 )
             elif e.returncode == 128 and "pathspec" in e.stderr:
                 # this command only returns one unmatched file at a time, so we need to rerun it per file
@@ -280,11 +283,9 @@ class SubprocessGitManager(BaseGitRepo):
                 return GitResult(
                     status=GitOpStatus.PATHSPEC_ERROR,
                     raw_data=e,
-                    error_details={
-                        "raw_error": e.stderr,
-                        "unmatched_files": unmatched_files,
-                        "committed_files": committed_files,
-                    },
+                    error_details=e.stderr,
+                    unmatched_files=unmatched_files,
+                    committed_files=committed_files,
                 )
 
             elif (
@@ -474,7 +475,25 @@ class SubprocessGitManager(BaseGitRepo):
 
     def search_repo_text(self, text_pattern: str) -> GitResult:
         """Performs semantic keyword, symbol, or error string searches"""
-        return "Placeholder"
+
+        try:
+            grep_result = subprocess.run(
+                ["git", "grep", "-i", "-n", text_pattern, "--", "src/**/*.py", "src/**/*.md"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            if e.returncode == 1 and e.stderr == "":
+                return GitResult(
+                    status=GitOpStatus.NO_MATCHES, raw_data=e, error_details=e.stderr
+                )
+
+            return GitResult(
+                status=GitOpStatus.SUBPROCESS_ERROR, raw_data=e, error_details=e.stderr
+            )
+
+        return GitResult(status=GitOpStatus.FOUND_MATCHES, raw_data=grep_result)
 
     def git_status(self) -> GitResult:
         """Performs git status command to check staging and possible merging conflicts."""
