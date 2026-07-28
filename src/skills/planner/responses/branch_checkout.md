@@ -35,5 +35,5 @@ Created and switched to a new branch `{branch_name}`.
 Ran into a CalledProcessError when attempting to switch or creating a new branch, with branch name `{branch_name}`, using subprocess.
 
 The error details:
-raw_data: {raw_data}
-error_details: {error_details}
+raw_data: `{raw_data}`
+error_details: `{error_details}`
