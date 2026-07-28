@@ -3,7 +3,7 @@
 #  LocalGitRepo Abstract Class
 # -------------------------------
 
-from base import BaseGitRepo
+from .base import BaseGitRepo
 from .types import GitResult, GitOpStatus
 
 

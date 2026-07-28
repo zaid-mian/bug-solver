@@ -6,8 +6,8 @@
 import subprocess
 from pathlib import Path
 
-from base import BaseGitRepo
-from security import sanitize_and_tokenize
+from .base import BaseGitRepo
+from .security import sanitize_and_tokenize
 from .types import GitResult, GitOpStatus
 
 
