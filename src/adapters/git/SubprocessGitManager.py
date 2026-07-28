@@ -63,7 +63,7 @@ class SubprocessGitManager(BaseGitRepo):
                         error_details=e.stderr,
                     )
 
-                if branch_name == curr_branch:
+                if branch_name == curr_branch.stdout.strip():
                     # no action needed then already on the correct branch
                     return GitResult(status=GitOpStatus.ALREADY_ON_BRANCH)
 
@@ -126,11 +126,11 @@ class SubprocessGitManager(BaseGitRepo):
                     )
 
                 # check if a branch with the same name exists remotely, if so then return to agent to get a new name
-                if branch_name in all_branches:
+                if branch_name in all_branches.stdout.strip():
                     return GitResult(
                         status=GitOpStatus.BRANCH_EXISTS_REMOTELY,
                         raw_data=all_branches,
-                        error_details="Branch '{branch_name}' exists outside the developer's local repo, should not use this branch or it's name.",
+                        error_details=f"Branch '{branch_name}' exists outside the developer's local repo, should not use this branch or it's name.",
                     )
 
                 else:
@@ -187,11 +187,11 @@ class SubprocessGitManager(BaseGitRepo):
                     error_details=e.stderr,
                 )
 
-            if branch_name in all_branches:
+            if branch_name in all_branches.stdout.strip():
                 return GitResult(
                     GitOpStatus.BRANCH_ALREADY_EXISTS,
                     raw_data=all_branches,
-                    error_details="Branch '{branch_name}' already exists",
+                    error_details=f"Branch '{branch_name}' already exists",
                 )
 
             else:
@@ -277,15 +277,15 @@ class SubprocessGitManager(BaseGitRepo):
                             parts = line.split("'")
                             unmatched_files.append(parts[1])
 
-                    return GitResult(
-                        status=GitOpStatus.PATHSPEC_ERROR,
-                        raw_data=e,
-                        error_details={
-                            "raw_error": e.stderr,
-                            "unmatched_files": unmatched_files,
-                            "committed_files": committed_files,
-                        },
-                    )
+                return GitResult(
+                    status=GitOpStatus.PATHSPEC_ERROR,
+                    raw_data=e,
+                    error_details={
+                        "raw_error": e.stderr,
+                        "unmatched_files": unmatched_files,
+                        "committed_files": committed_files,
+                    },
+                )
 
             elif (
                 e.returncode == 128 or e.returncode == 1
@@ -304,7 +304,7 @@ class SubprocessGitManager(BaseGitRepo):
         # check staging status
         git_result_status = self.git_status()
 
-        if git_result_status.status != "git_status":
+        if git_result_status.status != GitOpStatus.GIT_STATUS:
             return GitResult(
                 status=GitOpStatus.FAILED_STATUS,
                 raw_data=git_result_status.raw_data,
@@ -397,7 +397,7 @@ class SubprocessGitManager(BaseGitRepo):
             elif e.returncode == 128 and (
                 "repository not found" in e.stderr
                 or "no configured push destination" in e.stderr
-                or "does not appear to be a git repository"
+                or "does not appear to be a git repository" in e.stderr
             ):
                 return GitResult(
                     status=GitOpStatus.REPOSITORY_NOT_FOUND,

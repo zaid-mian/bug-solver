@@ -41,8 +41,8 @@ def sanitize_and_tokenize(args_str: str) -> Tuple[bool, List[str], str]:
         return False, [], f"The Git subcommand '{subcommand}' is prohibited."
 
     # Inspect tokens for banned flags
+    violations = []
     for token in tokens:
-        violations = []
         # Check exact matches or flags starting with banned prefixes (e.g. -c core.pager=...)
         for banned in BANNED_FLAGS:
             if (
@@ -52,6 +52,7 @@ def sanitize_and_tokenize(args_str: str) -> Tuple[bool, List[str], str]:
             ):
                 violations.append(banned)
 
+    if violations:
         return False, [], f"Security policy blocked arguments/flags: '{violations}'"
 
     return True, tokens, ""
