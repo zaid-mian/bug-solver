@@ -93,7 +93,7 @@ _Action Required: You may have to resolve a complicated merge conflict._
 
 ## subprocess_error
 
-Ran into a CalledProcessError when attempting to stage and commit code, using subprocess.
+Ran into a CalledProcessError when attempting to stage and commit code.
 
 Files attempted to be staged or committed:
 {files}

@@ -9,6 +9,11 @@ from typing import Any, Optional
 
 class GitOpStatus(Enum):
     # ---------------------------
+    #  For list_local_branches
+    # ---------------------------
+    LISTED_BRANCHES = "listed_branches"
+
+    # ---------------------------
     #  For checkout_branch
     # ---------------------------
     # we do not need to create a new branch
@@ -58,9 +63,16 @@ class GitOpStatus(Enum):
     NO_UPSTREAM_SET = "no_upstream_set"
     MISSING_BRANCH_OR_REFERENCE = "missing_branch_or_reference"
 
-    # ...
+    # ------------------------------
+    #  For search repo
+    # ------------------------------
+    FOUND_MATCHES = "found_matches"
+
+    # errors
     NO_MATCHES = "no_matches"
-    DIRTY_WORKING_TREE = "dirty_working_tree"
+
+    # ... (un used)
+    # DIRTY_WORKING_TREE = "dirty_working_tree"
 
     # ------------------------
     #  For Git Status
@@ -88,3 +100,6 @@ class GitResult:
     status: GitOpStatus
     raw_data: Any = None
     error_details: Optional[str] = None
+    ignored_files: Optional[list] = None
+    unmatched_files: Optional[list] = None
+    committed_files: Optional[list] = None

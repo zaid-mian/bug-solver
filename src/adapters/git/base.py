@@ -9,6 +9,10 @@ from .types import GitResult
 
 class BaseGitRepo(ABC):
     @abstractmethod
+    def list_local_branches(self):
+        pass
+
+    @abstractmethod
     def checkout_branch(self, branch_name: str, create_new: bool = True) -> GitResult:
         """Switches or creates a new branch."""
         pass

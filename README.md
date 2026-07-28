@@ -56,23 +56,30 @@ src/
 │   ├── test_runner/
 │   └── pr_writer/
 ├── tools/                  # LangChain tool wrappers over the adapters
+│   └── git_tools.py        #   git_tools(adapter) factory → list[BaseTool]
 ├── utils/
 │   └── template_loader.py  # loads a `##` section from a skill response .md
 ├── constants.py
 └── cli.py                  # Typer CLI entrypoint
 ```
 
+See [docs/ROADMAP.md](docs/ROADMAP.md) for a component-by-component status and the remaining steps.
+
 ### Adapters
 
 Each adapter domain exposes an abstract base class that the graph depends on:
 
-- **`BaseGitRepo`** — `checkout_branch`, `apply_patch_or_commit`, `push`, `pull`, `git_status`, `search_repo_text`, plus `run_git_command` (a security-gated **escape hatch** for complex situations the standard tools don't cover). Every operation returns a typed `GitResult(status: GitOpStatus, raw_data, error_details)` so nodes can branch on rich, structured outcomes — the `GitOpStatus` enum enumerates a distinct status per known failure mode (e.g. `BRANCH_EXISTS_REMOTELY`, `GITIGNORE_ERROR`, `NON_FAST_FORWARD`, `MERGE_CONFICT`, `FORBIDDEN_ARGS`), each mapped to an actionable response template. `SubprocessGitManager` implements the full interface with the `git` CLI; `GitPythonManager` is a GitPython-based alternative (still stubbed). The escape hatch runs `git` with `shell=False` and passes args through [`security.sanitize_and_tokenize`](src/adapters/git/security.py), which `shlex`-tokenizes the input and blocks dangerous flags (`-c`, `--exec`, `--upload-pack`, …) and subcommands (`config`, `bisect`, …).
+- **`BaseGitRepo`** — `list_local_branches`, `checkout_branch`, `apply_patch_or_commit`, `push`, `pull`, `git_status`, `search_repo_text` (a `git grep` over the repo's Python/Markdown sources), plus `run_git_command` (a security-gated **escape hatch** for complex situations the standard tools don't cover). Every operation returns a typed `GitResult(status: GitOpStatus, raw_data, error_details)` so nodes can branch on rich, structured outcomes — the `GitOpStatus` enum enumerates a distinct status per known failure mode (e.g. `BRANCH_EXISTS_REMOTELY`, `GITIGNORE_ERROR`, `NON_FAST_FORWARD`, `MERGE_CONFICT`, `FORBIDDEN_ARGS`), each mapped to an actionable response template. `SubprocessGitManager` implements the full interface with the `git` CLI; `GitPythonManager` is a GitPython-based alternative (still stubbed). The escape hatch runs `git` with `shell=False` and passes args through [`security.sanitize_and_tokenize`](src/adapters/git/security.py), which `shlex`-tokenizes the input and blocks dangerous flags (`-c`, `--exec`, `--upload-pack`, …) and subcommands (`config`, `bisect`, …).
 - **`BaseFileSystemTools`** — `read_file`, `write_files`, `find_files`, `list_dir`.
 - **`BaseGitHubClient`** — `get_issue`, `create_pull_request`, `post_issue_comment`.
 
+### Tools
+
+The [tools/](src/tools/) layer bridges the adapters to the LLM. [git_tools.py](src/tools/git_tools.py) exposes a `git_tools(git_adapter)` **factory** that dependency-injects a `BaseGitRepo` implementation and returns a list of LangChain `@tool`s to bind to a graph node (`list_local_branches`, `checkout_branch`, `stage_patch_and_commit`, `push`, `pull`). Each tool calls the adapter, then renders the resulting `GitOpStatus` into an agent-facing message via the response templates below — so the adapter returns *typed data* and the tool layer decides *how the agent hears about it*.
+
 ### Skills & templated responses
 
-Each node has a `skills/<node>/SKILL.md` prompt. Tools can return human/agent-readable responses rendered from markdown templates under `skills/<node>/responses/`. [template_loader.py](src/utils/template_loader.py) extracts a named `##` section from those files — for example, [planner/responses/branch_checkout.md](src/skills/planner/responses/branch_checkout.md) maps each `GitOpStatus` to an explanatory message the agent can act on.
+Each node has a `skills/<node>/SKILL.md` prompt. Tools return human/agent-readable responses rendered from markdown templates under `skills/<node>/responses/` (e.g. `branch_checkout.md`, `commit.md`, `push.md`, `pull.md`, `status.md`, `grep_repo.md`, `local_branches.md`, `fallback.md`). [template_loader.py](src/utils/template_loader.py) extracts the `##` section matching a result's `GitOpStatus` — for example, [planner/responses/branch_checkout.md](src/skills/planner/responses/branch_checkout.md) maps each status to an explanatory, often action-prompting message the agent can act on.
 
 ## CLI
 

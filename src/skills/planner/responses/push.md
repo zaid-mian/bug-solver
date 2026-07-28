@@ -5,7 +5,7 @@
 Successfully pushed to the remote `{remote}` in branch `{branch_name}`
 
 Push result:
-`{push_result}`
+`{raw_data}`
 
 ## behind_branch
 
@@ -53,9 +53,6 @@ _Action Required: Try to diagnose via the error details and raw data, attempt ag
 
 The current working directory that was attempted to be staged in was not in a git repository OR the remote target `{remote}` is not defined in the configuration.
 
-All files attempted:
-{files}
-
 Error details:
 raw_data: `{raw_data}`
 error_details: `{error_details}`
@@ -64,7 +61,7 @@ _Action Required: Switch to a git directory, mabye go down levels and/or get a l
 
 ## subprocess_error
 
-Ran into a CalledProcessError when attempting to push to remote `{remote}` branch `{branch_name}`, using subprocess.
+Ran into a CalledProcessError when attempting to push to remote `{remote}` branch `{branch_name}`.
 
 The error details:
 raw_data: `{raw_data}`

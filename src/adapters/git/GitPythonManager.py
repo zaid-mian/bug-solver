@@ -3,11 +3,14 @@
 #  LocalGitRepo Abstract Class
 # -------------------------------
 
-from .base import BaseGitRepo
+from base import BaseGitRepo
 from .types import GitResult, GitOpStatus
 
 
 class GitPythonManager(BaseGitRepo):
+    def list_local_branches(self):
+        pass
+
     def checkout_branch(self, branch_name: str, create_new: bool = True) -> str:
         """Switches or creates a new branch."""
         return "Placeholder"
