@@ -34,3 +34,15 @@ class BaseGitRepo(ABC):
     def search_repo_text(self, text_pattern: str) -> GitResult:
         """Performs semantic keyword, symbol, or error string searches"""
         pass
+
+    @abstractmethod
+    def git_status(self) -> GitResult:
+        """Performs git status command to check staging and possible merging conflicts."""
+        pass
+
+    @abstractmethod
+    def run_git_command(
+        self, args_str: str, timeout_seconds: float = 30.0
+    ) -> GitResult:
+        """This is a Fallback or Escape Hatch Tool in case the standard tools are not sufficient for complex Git conflicts or issues."""
+        pass

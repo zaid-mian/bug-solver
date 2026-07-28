@@ -3,7 +3,8 @@
 #  LocalGitRepo Abstract Class
 # -------------------------------
 
-from base import BaseGitRepo
+from .base import BaseGitRepo
+from .types import GitResult, GitOpStatus
 
 
 class GitPythonManager(BaseGitRepo):
@@ -19,6 +20,20 @@ class GitPythonManager(BaseGitRepo):
         """Pushes current branch to remote."""
         return "Placeholder"
 
+    def pull(self, branch_name: str, remote: str = "origin") -> GitResult:
+        """Pulls remote branch to current branch."""
+        return "Placeholder"
+
     def search_repo_text(self, text_pattern: str) -> str:
         """Performs semantic keyword, symbol, or error string searches"""
         return "Placeholder"
+
+    def git_status(self) -> GitResult:
+        """Performs git status command to check staging and possible merging conflicts."""
+        pass
+
+    def run_git_command(
+        self, args_str: str, timeout_seconds: float = 30.0
+    ) -> GitResult:
+        """This is a Fallback or Escape Hatch Tool in case the standard tools are not sufficient for complex Git conflicts or issues."""
+        pass

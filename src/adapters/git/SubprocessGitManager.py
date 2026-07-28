@@ -4,12 +4,17 @@
 # -------------------------------
 
 import subprocess
+from pathlib import Path
 
 from .base import BaseGitRepo
+from .security import sanitize_and_tokenize
 from .types import GitResult, GitOpStatus
 
 
 class SubprocessGitManager(BaseGitRepo):
+    def __init__(self, repo_path: Path):
+        self.repo_path = repo_path
+
     def list_local_branches(self):
         try:
             result = subprocess.run(
@@ -58,7 +63,7 @@ class SubprocessGitManager(BaseGitRepo):
                         error_details=e.stderr,
                     )
 
-                if branch_name == curr_branch:
+                if branch_name == curr_branch.stdout.strip():
                     # no action needed then already on the correct branch
                     return GitResult(status=GitOpStatus.ALREADY_ON_BRANCH)
 
@@ -121,11 +126,11 @@ class SubprocessGitManager(BaseGitRepo):
                     )
 
                 # check if a branch with the same name exists remotely, if so then return to agent to get a new name
-                if branch_name in all_branches:
+                if branch_name in all_branches.stdout.strip():
                     return GitResult(
                         status=GitOpStatus.BRANCH_EXISTS_REMOTELY,
                         raw_data=all_branches,
-                        error_details="Branch '{branch_name}' exists outside the developer's local repo, should not use this branch or it's name.",
+                        error_details=f"Branch '{branch_name}' exists outside the developer's local repo, should not use this branch or it's name.",
                     )
 
                 else:
@@ -182,11 +187,11 @@ class SubprocessGitManager(BaseGitRepo):
                     error_details=e.stderr,
                 )
 
-            if branch_name in all_branches:
+            if branch_name in all_branches.stdout.strip():
                 return GitResult(
                     GitOpStatus.BRANCH_ALREADY_EXISTS,
                     raw_data=all_branches,
-                    error_details="Branch '{branch_name}' already exists",
+                    error_details=f"Branch '{branch_name}' already exists",
                 )
 
             else:
@@ -272,17 +277,19 @@ class SubprocessGitManager(BaseGitRepo):
                             parts = line.split("'")
                             unmatched_files.append(parts[1])
 
-                    return GitResult(
-                        status=GitOpStatus.PATHSPEC_ERROR,
-                        raw_data=e,
-                        error_details={
-                            "raw_error": e.stderr,
-                            "unmatched_files": unmatched_files,
-                            "committed_files": committed_files,
-                        },
-                    )
+                return GitResult(
+                    status=GitOpStatus.PATHSPEC_ERROR,
+                    raw_data=e,
+                    error_details={
+                        "raw_error": e.stderr,
+                        "unmatched_files": unmatched_files,
+                        "committed_files": committed_files,
+                    },
+                )
 
-            elif e.returncode == 128 and "not a git repository" in e.stderr:
+            elif (
+                e.returncode == 128 or e.returncode == 1
+            ) and "not a git repository" in e.stderr:
                 return GitResult(
                     status=GitOpStatus.GITREPO_ERROR, raw_data=e, error_details=e.stderr
                 )
@@ -293,6 +300,17 @@ class SubprocessGitManager(BaseGitRepo):
                 raw_data=e,
                 error_details=e.stderr,
             )
+
+        # check staging status
+        git_result_status = self.git_status()
+
+        if git_result_status.status != GitOpStatus.GIT_STATUS:
+            return GitResult(
+                status=GitOpStatus.FAILED_STATUS,
+                raw_data=git_result_status.raw_data,
+                error_details=git_result_status.error_details,
+            )
+        # else it should be clean and it continues to commit
 
         # next commit with a message
         try:
@@ -311,7 +329,9 @@ class SubprocessGitManager(BaseGitRepo):
                 )
             if e.returncode == 1 and e.stderr == "":
                 return GitResult(status=GitOpStatus.CLEAN_TREE, raw_data=e)
-            elif e.returncode == 128 and "not a git repository" in e.stderr:
+            elif (
+                e.returncode == 128 or e.returncode == 1
+            ) and "not a git repository" in e.stderr:
                 return GitResult(
                     status=GitOpStatus.GITREPO_ERROR, raw_data=e, error_details=e.stderr
                 )
@@ -350,7 +370,9 @@ class SubprocessGitManager(BaseGitRepo):
                     raw_data=e,
                     error_details=e.stderr,
                 )
-            elif e.returncode == 128 and "no upstream branch" in e.stderr:
+            elif (
+                e.returncode == 128 or e.returncode == 1
+            ) and "no upstream branch" in e.stderr:
                 # then run the -u in the push command
                 try:
                     pushed_result = subprocess.run(
@@ -375,6 +397,7 @@ class SubprocessGitManager(BaseGitRepo):
             elif e.returncode == 128 and (
                 "repository not found" in e.stderr
                 or "no configured push destination" in e.stderr
+                or "does not appear to be a git repository" in e.stderr
             ):
                 return GitResult(
                     status=GitOpStatus.REPOSITORY_NOT_FOUND,
@@ -396,8 +419,124 @@ class SubprocessGitManager(BaseGitRepo):
 
     def pull(self, branch_name: str, remote: str = "origin") -> GitResult:
         """Pulls remote branch to current branch."""
-        return "Placeholder"
+
+        try:
+            pull_result = subprocess.run(
+                ["git", "pull", remote, branch_name],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            if (e.returncode == 1 or e.returncode == 128) and (
+                "conflict" in e.stderr or "CONFLICT" in e.stderr
+            ):
+                return GitResult(
+                    status=GitOpStatus.MERGE_CONFICT, raw_data=e, error_details=e.stderr
+                )
+            elif (e.returncode == 1 or e.returncode == 128) and (
+                "overwritten" in e.stderr or "local changes" in e.stderr
+            ):
+                return GitResult(
+                    status=GitOpStatus.LOCAL_CHANGES_CONFLICT,
+                    raw_data=e,
+                    error_details=e.stderr,
+                )
+            elif (
+                e.returncode == 128 or e.returncode == 1
+            ) and "no tracking information" in e.stderr:
+                return GitResult(
+                    status=GitOpStatus.NO_UPSTREAM_SET,
+                    raw_data=e,
+                    error_details=e.stderr,
+                )
+            elif e.returncode == 128 and (
+                "find remote ref" in e.stderr
+                or " '{remote}' does not appear to be a git repository" in e.stderr
+            ):
+                return GitResult(
+                    status=GitOpStatus.MISSING_BRANCH_OR_REFERENCE,
+                    raw_data=e,
+                    error_details=e.stderr,
+                )
+
+            # otherwise give the simple subprocess error
+            return GitResult(
+                status=GitOpStatus.SUBPROCESS_ERROR,
+                raw_data=e,
+                error_details=e.stderr,
+            )
+
+        # okay then return the PULLED_FROM_REMOTE_BRANCH GitResult
+        return GitResult(
+            status=GitOpStatus.PULLED_FROM_REMOTE_BRANCH, raw_data=pull_result
+        )
 
     def search_repo_text(self, text_pattern: str) -> GitResult:
         """Performs semantic keyword, symbol, or error string searches"""
         return "Placeholder"
+
+    def git_status(self) -> GitResult:
+        """Performs git status command to check staging and possible merging conflicts."""
+        try:
+            status_result = subprocess.run(
+                ["git", "status"], capture_output=True, text=True, check=True
+            )
+        except subprocess.CalledProcessError as e:
+            # check via return code
+            if e.returncode == 1 and "unmerged paths" in e.stderr:
+                return GitResult(
+                    status=GitOpStatus.MERGE_CONFICT, raw_data=e, error_details=e.stderr
+                )
+
+            # otherwise give the simple subprocess error
+            return GitResult(
+                status=GitOpStatus.SUBPROCESS_ERROR,
+                raw_data=e,
+                error_details=e.stderr,
+            )
+
+        return GitResult(status=GitOpStatus.GIT_STATUS, raw_data=status_result)
+
+    def run_git_command(
+        self, args_str: str, timeout_seconds: float = 30.0
+    ) -> GitResult:
+        """This is a Fallback or Escape Hatch Tool in case the standard tools are not sufficient for complex Git conflicts or issues."""
+        # First validate and tokenize
+        is_safe, tokens, error_msg = sanitize_and_tokenize(args_str)
+        if not is_safe:
+            return GitResult(
+                status=GitOpStatus.FORBIDDEN_ARGS,
+                raw_data=tokens,
+                error_details=error_msg,
+            )
+
+        # Then build the executable array
+        command = ["git"] + tokens
+
+        # Then execute without shell=True
+        try:
+            fallback_result = subprocess.run(
+                command,
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                shell=False,
+                check=True,
+            )
+
+        except subprocess.TimeoutExpired:
+            return GitResult(
+                status=GitOpStatus.TIMEOUT,
+                error_details=f"Command 'git {args_str}' timed out after {timeout_seconds} seconds.",
+            )
+
+        except subprocess.CalledProcessError as e:
+            return GitResult(
+                status=GitOpStatus.SUBPROCESS_ERROR, raw_data=e, error_details=e.stderr
+            )
+
+        return GitResult(
+            status=GitOpStatus.EXECUTED_FALLBACK_COMMAND, raw_data=fallback_result
+        )

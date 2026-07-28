@@ -42,6 +42,7 @@ src/
 │   ├── git/                # Local Git operations
 │   │   ├── base.py         #   BaseGitRepo abstract interface
 │   │   ├── types.py        #   GitResult / GitOpStatus typed results
+│   │   ├── security.py     #   arg sanitizer for the escape-hatch tool
 │   │   ├── SubprocessGitManager.py   # concrete impl via `subprocess`
 │   │   └── GitPythonManager.py       # concrete impl via GitPython
 │   ├── filesystem/         # Local filesystem operations (read/write/find/list)
@@ -65,7 +66,7 @@ src/
 
 Each adapter domain exposes an abstract base class that the graph depends on:
 
-- **`BaseGitRepo`** — `checkout_branch`, `apply_patch_or_commit`, `push`, `search_repo_text`. Operations return a typed `GitResult(status: GitOpStatus, raw_data, error_details)` so nodes can branch on rich, structured outcomes (e.g. `BRANCH_EXISTS_REMOTELY`, `ALREADY_ON_BRANCH`, `MERGE_CONFLICT`). `SubprocessGitManager` implements this with the `git` CLI; `GitPythonManager` is a GitPython-based alternative.
+- **`BaseGitRepo`** — `checkout_branch`, `apply_patch_or_commit`, `push`, `pull`, `git_status`, `search_repo_text`, plus `run_git_command` (a security-gated **escape hatch** for complex situations the standard tools don't cover). Every operation returns a typed `GitResult(status: GitOpStatus, raw_data, error_details)` so nodes can branch on rich, structured outcomes — the `GitOpStatus` enum enumerates a distinct status per known failure mode (e.g. `BRANCH_EXISTS_REMOTELY`, `GITIGNORE_ERROR`, `NON_FAST_FORWARD`, `MERGE_CONFICT`, `FORBIDDEN_ARGS`), each mapped to an actionable response template. `SubprocessGitManager` implements the full interface with the `git` CLI; `GitPythonManager` is a GitPython-based alternative (still stubbed). The escape hatch runs `git` with `shell=False` and passes args through [`security.sanitize_and_tokenize`](src/adapters/git/security.py), which `shlex`-tokenizes the input and blocks dangerous flags (`-c`, `--exec`, `--upload-pack`, …) and subcommands (`config`, `bisect`, …).
 - **`BaseFileSystemTools`** — `read_file`, `write_files`, `find_files`, `list_dir`.
 - **`BaseGitHubClient`** — `get_issue`, `create_pull_request`, `post_issue_comment`.
 
