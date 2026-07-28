@@ -8,7 +8,9 @@ from typing import Any, Optional
 
 
 class GitOpStatus(Enum):
-    # For checkout_branch
+    # ---------------------------
+    #  For checkout_branch
+    # ---------------------------
     # we do not need to create a new branch
     SWITCHED_TO_EXISTING = "switched_to_existing"
     ALREADY_ON_BRANCH = "already_on_branch"
@@ -20,14 +22,41 @@ class GitOpStatus(Enum):
     # For general branch creation and switch
     BRANCH_CREATED = "branch_created"
 
+    # ---------------------------
+    #  For apply_patch_or_commit
+    # ---------------------------
+    STAGED_AND_COMMITTED = "staged_and_committed"
+
+    # errors
+    GITIGNORE_ERROR = "gitignore_error"
+    PATHSPEC_ERROR = "pathspec_error"
+    GITREPO_ERROR = "gitrepo_error"
+    CLEAN_TREE = "clean_tree"
+    MISSING_COMMIT_MESSAGE = "missing_commit_message"
+
+    # -----------------------------
+    #  For push (to remote branch)
+    # -----------------------------
+    PUSHED_TO_REMOTE_BRANCH = "pushed_to_remote_branch"
+
+    # errors
+    BEHIND_BRANCH = "behind_branch"
+    NON_FAST_FORWARD = "non_fast_forward"
+    UPSTREAM_BRANCH = "upstream_branch"
+    FAILED_UPSTREAM_PUSH = "failed_upstream_push"
+    REPOSITORY_NOT_FOUND = "repository_not_found"
+
     # ...
     SUCCESS = "success"
     NO_MATCHES = "no_matches"
     DIRTY_WORKING_TREE = "dirty_working_tree"
     MERGE_CONFICT = "merge_conflict"
+
     UNKOWN_ERROR = "unknown_error"
 
-    # for subprocess call/run errors
+    # ---------------------------------
+    #  For subprocess call/run errors
+    # ---------------------------------
     SUBPROCESS_ERROR = "subprocess_error"
 
 
