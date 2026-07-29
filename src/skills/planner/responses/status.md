@@ -5,7 +5,7 @@
 Successfully ran the git_status command.
 
 Status result:
-`{status_result}`
+`{raw_data}`
 
 ## merge_conflict
 
