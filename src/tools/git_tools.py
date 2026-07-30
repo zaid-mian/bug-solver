@@ -30,7 +30,7 @@ def git_tools(git_adapter: BaseGitRepo) -> List[BaseTool]:
     """
     Factory that binds an adapter implementation to LangChain @tools decorators.
     Using parse_docstring to give more argument context to the LLM.
-    Returns a list of tools to be bound to a LangGraph node.
+    Returns a list of tools to be bound to a LangGraph node(s).
     """
 
     # -------------------------------------------------------
@@ -279,3 +279,14 @@ def git_tools(git_adapter: BaseGitRepo) -> List[BaseTool]:
             raw_data=result.raw_data,
             error_details=result.error_details,
         )
+
+    return [
+        list_local_branches,
+        checkout_branch,
+        stage_patch_and_commit,
+        push,
+        pull,
+        git_grep,
+        git_status,
+        git_fallback,
+    ]

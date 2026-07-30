@@ -7,6 +7,7 @@ from git import Repo, InvalidGitRepositoryError
 from constants import Status
 from agent.graph import app
 from adapters.git.SubprocessGitManager import SubprocessGitManager
+from adapters.filesystem.PATHLIBPythonManager import PATHLIBPythonManager
 
 # ----------------------
 #  Example Commands
@@ -96,8 +97,10 @@ def run(
     # 2: resolve repository path
     target_repo_path = repo_path or get_repo_root()
 
-    # 3: Git and GitHub Manager
+    # 3: Git, Workspace/Filesystem, and GitHub Manager
     git_manager = SubprocessGitManager(repo_path=target_repo_path)
+
+    workspace_manager = PATHLIBPythonManager(root=target_repo_path)
 
     github_token = os.environ.get("GITHUB_TOKEN")
     github_manager = PyGithubManager(token=github_token) if github_token else None
@@ -106,6 +109,7 @@ def run(
     config = {
         "configurable": {
             "git_manager": git_manager,
+            "workspace_manager": workspace_manager,
             "github_manager": github_manager,
             "execution_mode": {
                 "auto_pr": auto_pr and not local_only,
