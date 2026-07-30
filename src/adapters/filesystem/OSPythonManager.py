@@ -1,38 +1,33 @@
-# ------------------------------------
-#  This is the Abrstact Interface for
-#   Local filesystem operations
-# ------------------------------------
+# -------------------------------------
+#  Concrete Extension of
+#  BaseFileSystemTools Abstract Class
+# -------------------------------------
 
-from abc import ABC, abstractmethod
 import os
 from pathlib import Path
 from typing import Dict
 
-from .types import FileSystemResult
+from .base import BaseFileSystemTools
+from .types import FileSystemResult, FileOpStatus
 
 
-class BaseFileSystemTools(ABC):
-    @abstractmethod
+class OSPythonManager(BaseFileSystemTools):
     def read_files(
         self, file_paths: list[str | os.PathLike | Path]
     ) -> FileSystemResult:
         """Reads file from local filesystem"""
         pass
 
-    @abstractmethod
     def write_files(
-        self,
-        file_paths_and_edits: Dict[str | os.PathLike | Path, str],
+        self, file_paths_and_edits: Dict[str | os.PathLike | Path, str]
     ) -> FileSystemResult:
         """Writes file to local filesystem"""
         pass
 
-    @abstractmethod
     def find_files(self, text_pattern: str) -> FileSystemResult:
         """Finds files by glop text patterns"""
         pass
 
-    @abstractmethod
     def list_dir(
         self, dir: str | os.PathLike | Path = None, recursive_search: bool = True
     ) -> FileSystemResult:
