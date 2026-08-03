@@ -8,6 +8,11 @@ from constants import Status
 from agent.graph import app
 from adapters.git.SubprocessGitManager import SubprocessGitManager
 from adapters.filesystem.PATHLIBPythonManager import PATHLIBPythonManager
+from adapters.platform.PyGithubManager import PyGithubManager
+
+from adapters.git.types import GitResult, GitOpStatus
+from adapters.filesystem.types import FileSystemResult, FileOpStatus
+from adapters.platform.types import GitHubClientResult, GitHubOpStatus
 
 # ----------------------
 #  Example Commands
@@ -60,6 +65,9 @@ def run(
     target: Annotated[
         str, typer.Argument(help="Issue number or local bug description.")
     ],
+    repo_name: Annotated[
+        str, typer.Argument("--name", "-n", help="The name of the GitHub repository")
+    ],
     repo_path: Annotated[
         Optional[Path], typer.Option("--path", "-p", help="Path to local repository.")
     ] = None,  # standard default
@@ -98,12 +106,29 @@ def run(
     target_repo_path = repo_path or get_repo_root()
 
     # 3: Git, Workspace/Filesystem, and GitHub Manager
-    git_manager = SubprocessGitManager(repo_path=target_repo_path)
+    git_manager: GitResult = SubprocessGitManager(repo_path=target_repo_path)
 
-    workspace_manager = PATHLIBPythonManager(root=target_repo_path)
+    workspace_manager: FileSystemResult = PATHLIBPythonManager(root=target_repo_path)
 
     github_token = os.environ.get("GITHUB_TOKEN")
-    github_manager = PyGithubManager(token=github_token) if github_token else None
+    github_manager: GitHubClientResult = (
+        PyGithubManager(token=github_token, repo_name=repo_name)
+        if github_token and repo_name
+        else None
+    )
+
+    # check if the initialization of the GitHub client failed was a success
+    if github_manager.status != GitHubOpStatus.INIT_GITHUB_CLIENT:
+        # then raise an error message
+        typer.echo(
+            (
+                f"The initialization of the GitHub Client Manager failed: [{github_manager.status}: {github_manager.error_details}]",
+                f"Raw data: {github_manager.raw_data}"
+                f"Make sure the repository name is owner/repo as in GitHub."
+                f"Make sure to have the valid credentials/",
+            ),
+            err=True,
+        )
 
     # 4: Construct RunnableConfig (Execution Environment)
     config = {
