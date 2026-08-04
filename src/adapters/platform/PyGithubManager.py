@@ -48,11 +48,15 @@ class PyGithubManager(BaseGitHubClient):
             raw_data=f"Initilized a GitHub Client with creds {self.token} on repo {self.repo_name}",
         )
 
-    def get_issue(self, issue_number: int) -> dict:
+    def get_issue(self, issue_number: int) -> GitHubClientResult:
         """Fetches issue title, description, and comments."""
 
         try:
             issue = self.repo.get_issue(number=issue_number)
+
+            comments = []
+            for comment in issue.get_comments():
+                comments.append(comment)
 
         except GithubException as e:
             # handle specific HTTP error status codes
@@ -85,12 +89,13 @@ class PyGithubManager(BaseGitHubClient):
                 "Issue Description": issue.body,
                 "State": issue.state,
             },
+            comments=comments,
             raw_data=issue,
         )
 
     def create_pull_request(
         self, title: str, body: str, head_branch: str, base_branch: str = "main"
-    ) -> str:
+    ) -> GitHubClientResult:
         """Opens a Pull Request and returns the PR URL."""
 
         try:
@@ -122,6 +127,53 @@ class PyGithubManager(BaseGitHubClient):
 
         return GitHubClientResult(status=GitHubOpStatus.PR_MADE, raw_data=pr)
 
-    def post_issue_comment(self, issue_number: int, comment: str) -> None:
+    def get_default_branch(self) -> GitHubClientResult:
+        """Prevents PR creation tools from failing on repos using non-standard target branches."""
+
+        try:
+            default_branch = self.repo.default_branch
+
+        except GithubException as e:
+            return GitHubClientResult(
+                status=GitHubOpStatus.API_ERROR,
+                raw_data=e,
+                error_details=e.data["errors"],
+            )
+
+        except Exception as e:
+            return GitHubClientResult(
+                status=GitHubOpStatus.GENERAL_EXCEPTION,
+                raw_data=e,
+                error_details=f"An unexpected error occurred: {str(e)}",
+            )
+
+        return GitHubClientResult(
+            status=GitHubOpStatus.RETRIEVED_DEFAULT, default_branch=default_branch
+        )
+
+    def post_issue_comment(self, issue_number: int, comment: str) -> GitHubClientResult:
         """Updates issue progress."""
-        pass
+
+        try:
+            issue = self.repo.get_issue(number=issue_number)
+
+            # create the comment
+            comment = issue.create_comment(comment)
+
+        except GithubException as e:
+            return GitHubClientResult(
+                status=GitHubOpStatus.API_ERROR,
+                raw_data=e,
+                error_details=e.data["errors"],
+            )
+
+        except Exception as e:
+            return GitHubClientResult(
+                status=GitHubOpStatus.GENERAL_EXCEPTION,
+                raw_data=e,
+                error_details=f"An unexpected error occurred: {str(e)}",
+            )
+
+        return GitHubClientResult(
+            status=GitHubOpStatus.COMMENT_MADE,
+        )

@@ -11,6 +11,9 @@ Issue State: `{issue_state}`
 issue_dict:
 {issue_dict}
 
+Comments:
+{comments}
+
 raw_data:
 `{raw_data}`
 

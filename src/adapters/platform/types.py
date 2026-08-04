@@ -36,8 +36,14 @@ class GitHubOpStatus(Enum):
     REPO_OR_BRANCH_NOT_FOUND = "repo_or_branch_not_found"
 
     # -------------------------
+    #  For Get Default Branch
+    # -------------------------
+    RETRIEVED_DEFAULT = "retrieved_default"
+
+    # -------------------------
     #  For Post Issue Comment
     # -------------------------
+    COMMENT_MADE = "comment_made"
 
     # General Exception
     GENERAL_EXCEPTION = "general_exception"
@@ -49,6 +55,10 @@ class GitHubClientResult:
 
     # for get_issue
     issue_dict: Optional[Dict[str, Any]] = None
+    comments: Optional[list[Any]] = None
+
+    # for get_default_branch
+    default_branch: Optional[str] = None
 
     raw_data: Any = None
     error_details: Optional[str] = None
