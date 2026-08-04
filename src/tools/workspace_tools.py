@@ -76,18 +76,87 @@ def workspace_tools(filesystem_adapter: BaseFileSystemTools) -> List[BaseTool]:
         """
 
         # Execute via abstract adapter
-        result: FileSystemResult = filesystem_adapter.read_files(
+        result: FileSystemResult = filesystem_adapter.write_files(
             file_paths_and_edits=file_paths_and_edits
         )
 
         # Then load the markdown response template
         template: str = load_response_tempate(
-            skill="coder", tool_name="wrote_files", section=result.status.value
+            skill="coder", tool_name="write_files", section=result.status.value
         )
 
         # Format template placeholders with tool inputs and adapter results
         return template.format(
             written_files=result.written_files,
-            written_files=result.unwritten_files,
+            unwritten_files=result.unwritten_files,
             file_paths_and_edits=file_paths_and_edits,
         )
+
+    # -----------------------------------------
+    #  Tool 3: Find Files Tool
+    # -----------------------------------------
+    @tool(parse_docstring=True)
+    def find_files(text_pattern: str) -> str:
+        """
+        Run a grep onto the entire repository directly for a pattern, text_pattern.
+
+        Args:
+            text_pattern: The text pattern or piece of code that is being searched for to get the files that need to modified, to fix the bug/issue.
+        """
+
+        # Execute via abstract adapter
+        result: FileSystemResult = filesystem_adapter.find_files(
+            text_pattern=text_pattern
+        )
+
+        # Then load the markdown response template
+        template: str = load_response_tempate(
+            skill="planner", tool_name="find_files", section=result.status.value
+        )
+
+        # Format template placeholders with tool inputs and adapter results
+        return template.format(
+            text_pattern=text_pattern,
+            files=result.files,
+            matched_files=result.matched_files,
+            unreadable_files=result.unreadable_files,
+            raw_data=result.raw_data,
+            error_details=result.error_details,
+        )
+
+    # -------------------------------------
+    #  Tool 4: List Directory Tool
+    # -------------------------------------
+    @tool(parse_docstring=True)
+    def list_dir(
+        dir: str | os.PathLike | Path = None, recursive_search: bool = True
+    ) -> str:
+        """
+        Run through the directory structure, either recursively or not (recursive_search boolean), then returns visual representation and path representation of the structure, along a list of the files and directories found.
+
+        Args:
+            dir: Optional path of a directory that the LLM decides it needs to search through and/or under, default if this is not given is the root of the directory
+            recursive_search: Optional boolean for whether a recursive search from dir (or root) is executed, default is true
+        """
+
+        # Execute via abstract adapter
+        result: FileSystemResult = filesystem_adapter.list_dir(
+            dir=dir, recursive_search=recursive_search
+        )
+
+        # Then load the markdown response template
+        template: str = load_response_tempate(
+            skill="planner", tool_name="list_dir", section=result.status.value
+        )
+
+        # Format template placeholders with tool inputs and adapter results
+        return template.format(
+            dir=dir,
+            visual_repo_structure=result.visual_repo_structure,
+            path_repo_structure=result.path_repo_structure,
+            files=result.files,
+            dirs=result.dirs,
+            raw_data=result.raw_data,
+        )
+
+    return [read_files, write_files, find_files, list_dir]
