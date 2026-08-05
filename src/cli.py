@@ -133,9 +133,11 @@ def run(
     # 4: Construct RunnableConfig (Execution Environment)
     config = {
         "configurable": {
-            "git_manager": git_manager,
-            "workspace_manager": workspace_manager,
-            "github_manager": github_manager,
+            "adapters": {
+                "git_manager": git_manager,
+                "workspace_manager": workspace_manager,
+                "github_manager": github_manager,
+            },
             "execution_mode": {
                 "auto_pr": auto_pr and not local_only,
                 "new_branch": new_branch,
@@ -149,8 +151,13 @@ def run(
     initial_state = {
         "issue_id": resolved_issue_id,
         "issue_description": bug_description,
+        "repo_name": repo_name,
         "repo_path": str(target_repo_path),
-        "status": Status.IN_PROGESS,
+        "status": Status.IN_PROGRESS,
+        # the non-optional states with empty values
+        "relevant_files": [],
+        "retry_count": 0,
+        "messages": [],
     }
 
     # 6: Invoke the LangGraph Agent

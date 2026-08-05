@@ -137,7 +137,7 @@ def github_tools(github_adapter: BaseGitHubClient) -> List[BaseTool]:
     #  Tool 4: For Post Issue Comment Tool
     # -------------------------------------
     @tool(parse_docstring=True)
-    def post_issue_comment(self, issue_number: int, comment: str) -> str:
+    def post_issue_comment(issue_number: int, comment: str) -> str:
         """
         Post a comment onto the issue.
 
