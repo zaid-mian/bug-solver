@@ -5,19 +5,24 @@ Returns a predefined response. Replace logic and configuration as needed.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from dataclasses import dataclass
-from typing import Any, Dict, TypedDict, List, Optional, Literal
+from typing import Annotated, TypedDict, List, Optional, Literal
 from typing_extensions import TypedDict
 
-from langgraph.graph import StateGraph, START, END
-from langgraph.runtime import Runtime
-from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import BaseMessage
+from langgraph.graph import StateGraph, START, END, add_messages
+
+from .nodes import planner, coder, test_runner, evaluator, pr_writer
 
 # -------------------
 #  Import Constants
 # -------------------
 from constants import MAX_RETRIES, Status
 
+'''
 # -------------------
 #  Context
 # -------------------
@@ -29,6 +34,8 @@ class Context(TypedDict):
     """
 
     my_configurable_param: str
+'''
+
 
 # -------------------
 #  State Class
@@ -47,8 +54,10 @@ class State(TypedDict):
     # The bug report, issue description, or error stack trace
     issue_description: str
 
-    # The repository path
-    repo_path: str
+    # The repository name and path
+    repo_name: str
+
+    repo_path: str | os.PathLike | Path
 
     # Paths and code snippets from repo
     relevant_files: List[str]
@@ -68,6 +77,10 @@ class State(TypedDict):
     # Status
     status: Status
 
+    # message history
+    messages: Annotated[list[BaseMessage], add_messages]
+
+
 '''
 async def call_model(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
     """Process input and returns output.
@@ -80,53 +93,23 @@ async def call_model(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
     }
 '''
 
-# ------------------------
-#  Planner Node Function
-# ------------------------
-async def planner(state: State, runtime: Runtime[Context]):
-    return ("Placeholder")
-
-# ----------------------
-#  Coder Node Function
-# ----------------------
-async def coder(state: State, runtime: Runtime[Context]):
-    return ("Placeholder")
-
-# ----------------------------
-#  Test Runner Node Function
-# ----------------------------
-async def test_runner(state: State, runtime: Runtime[Context]):
-    return ("Placeholder")
-
-# ---------------------------
-#  Coder Evaluator Function
-# ---------------------------
-async def evaluator(state: State, runtime: Runtime[Context]):
-    return ("Placeholder")
-
-# ---------------------------
-#  Coder PR Writer Function
-# ---------------------------
-async def pr_writer(state: State, runtime: Runtime[Context], config: RunnableConfig):
-    return ("Placeholder")
 
 # ------------------------
 #  Conditional Function
 # ------------------------
 def check_status(state: State) -> Literal[0, 1, 2]:
-    if Status.FAILED in state['status']:
+    if Status.FAILED in state["status"]:
         return 1
-    elif Status.SUCCESS in state['status']:
+    elif Status.SUCCESS in state["status"]:
         return 0
-
-    # IN PROGRESS
-    if state['retry_count'] > MAX_RETRIES:
+    elif Status.IN_PROGRESS or state["retry_count"] > MAX_RETRIES:
         return 2
+
 
 # -----------------------
 #  Define the graph
 # -----------------------
-graph = StateGraph(State, context_schema=Context)
+graph = StateGraph(State)
 
 # -------------------------------
 #  Add each node and their edges
@@ -155,13 +138,7 @@ graph.add_edge("Test Runner", "Evaluator")
 # -------------------------------------------
 graph.add_node("PR Writer", pr_writer)
 graph.add_conditional_edges(
-    "Evaluator",
-    check_status,
-    {
-        0: "PR Writer",
-        1: "Coder",
-        2: "Planner"
-    }
+    "Evaluator", check_status, {0: "PR Writer", 1: "Coder", 2: "Planner"}
 )
 graph.add_edge("PR Writer", END)
 
