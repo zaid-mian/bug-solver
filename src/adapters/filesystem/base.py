@@ -1,5 +1,5 @@
 # ------------------------------------
-#  This is the Abrstact Interface for
+#  This is the Abstract Interface for
 #   Local filesystem operations
 # ------------------------------------
 
