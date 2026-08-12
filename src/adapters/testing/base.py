@@ -13,13 +13,15 @@ from .types import TestResult, TestOpStatus
 class BaseTestRunner(ABC):
     @abstractmethod
     def run_tests(
-        self, path: str | os.PathLike | Path = None, keyword: str = None
+        self, paths: list[str | os.PathLike | Path] = None, keyword: str = None
     ) -> TestResult:
         """Runs basic tests"""
         pass
 
     @abstractmethod
-    def collect_tests(self, path: str | os.PathLike | Path = None) -> TestResult:
+    def collect_tests(
+        self, paths: list[str | os.PathLike | Path] = None, keyword: str = None
+    ) -> TestResult:
         """Collect existing tests"""
         pass
 

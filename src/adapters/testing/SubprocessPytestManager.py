@@ -88,9 +88,74 @@ class SubprocessPytestManager(BaseTestRunner):
             failed=failed,
         )
 
-    def collect_tests(self, path: str | os.PathLike | Path = None) -> TestResult:
+    def collect_tests(
+        self, paths: list[str | os.PathLike | Path] = None, keyword: str = None
+    ) -> TestResult:
         """Collect existing tests"""
-        pass
+
+        passed = []
+        failed = []
+
+        collected_results = []
+        for path in paths:
+            try:
+                if keyword == None:
+                    collect_test_result = subprocess.run(
+                        ["pytest", "--co", path],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                else:
+                    collect_test_result = subprocess.run(
+                        ["pytest", "--co", "-k", keyword],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+
+                # otherwise the tests are successful, add to the list
+                collected_results.append(collect_test_result)
+                passed.append(path)
+            except subprocess.CalledProcessError as e:
+                if e.returncode == 1:
+                    return TestResult(
+                        status=TestOpStatus.COLLECTION_LEVEL_ERRORS,
+                        raw_data=e,
+                        passed=passed,
+                        failed=failed,
+                        error_details=e.stderr,
+                    )
+                elif e.returncode == 2:
+                    return TestResult(
+                        status=TestOpStatus.INTERRUPTED,
+                        raw_data=e,
+                        error_details=e.stderr,
+                        passed=passed,
+                        failed=failed,
+                    )
+                elif e.returncode == 5:
+                    failed.append(failed)
+
+        if failed == []:
+            return TestResult(
+                status=TestOpStatus.ALL_COLLECTED_TESTS,
+                raw_data=collected_results,
+                passed=passed,
+            )
+        elif passed == []:
+            return TestResult(
+                status=TestOpStatus.NO_TESTS_COLLECTED,
+                raw_data=collected_results,
+                failed=failed,
+            )
+
+        return TestResult(
+            status=TestOpStatus.SOME_TESTS_FAILED,
+            raw_data=collected_results,
+            passed=passed,
+            failed=failed,
+        )
 
     def run_test_command(
         self, args_str: str, timeout_seconds: float = 60.0

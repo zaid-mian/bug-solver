@@ -25,8 +25,18 @@ class TestOpStatus(Enum):
     # ---------------------
     #  For collect_tests
     # ---------------------
-    COLLECTED_TESTS = "collected_tests"  # collect-only success
+    ALL_COLLECTED_TESTS = "collected_tests"  # collect-only success
 
+    # errors
+    COLLECTION_LEVEL_ERRORS = "collection_level_errors"  # code 1
+    SOME_TESTS_NOT_COLLECTED = "some_tests_not_collected"
+    NO_TESTS_COLLECTED = "no_tests_collected"  # code 5
+
+    # -----------------------
+    #  For run_test_command
+    # -----------------------
+
+    # errors
     TIMEOUT = "timeout"
 
     # -----------------------------
