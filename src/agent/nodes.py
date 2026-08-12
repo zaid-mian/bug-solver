@@ -76,7 +76,57 @@ async def planner(state: State, config: RunnableConfig):
 #  Coder Node Function
 # ----------------------
 async def coder(state: State, config: RunnableConfig):
-    return "Placeholder"
+    """Coder node responsible for acting on the fix plan and coding the fixes."""
+
+    # 1. Dynamically load the skill prompt from src/skills/coder/SKILL.md
+    system_prompt_text = load_skill_prompt("coder")
+
+    # 2. Get bound tools for this specific domain node
+    adapters = config["configurable"]["adapters"]
+    bound_git_tools = git_tools(adapters["git_manager"])
+    bound_workspace_tools = workspace_tools(adapters["workspace_manager"])
+    bound_github_tools = github_tools(adapters["github_manager"])
+
+    tools = bound_git_tools + bound_workspace_tools + bound_github_tools
+
+    # extract tools by name for the ReACT loop
+    tools_by_name = {t.name: t for t in tools}
+
+    # 3. Bind tools to model and invoke with system prompt + conversation history
+    llm_with_tools = config["configurable"]["model"].bind_tools(tools)
+
+    # seed the conversation
+    messages = [SystemMessage(content=system_prompt_text), *state["messages"]]
+
+    # -----------------------
+    #  ReACT loop
+    # -----------------------
+    while True:
+        response = await llm_with_tools.ainvoke(messages)
+
+        messages.append(response)
+
+        if not response.tool_calls:
+            break  # The LLM is done calling tools (no tool_calls)
+
+        for tool_call in response.tool_calls:
+            result = await tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
+            messages.append(
+                ToolMessage(content=str(result), tool_call_id=tool_call["id"])
+            )
+
+    # Then extract the structured state from the final message (or a follow-up call)
+    content = response.content.strip()
+    if content.startswith("```"):
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+    final_data = json.loads(content.strip())
+
+    return {
+        "patch_code": final_data["patch_code"],
+        "messages": messages,
+    }
 
 
 # ----------------------------
