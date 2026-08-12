@@ -35,6 +35,7 @@ class TestOpStatus(Enum):
     # -----------------------
     #  For run_test_command
     # -----------------------
+    COMMAND_SUCCESS = "command_success"
 
     # errors
     TIMEOUT = "timeout"

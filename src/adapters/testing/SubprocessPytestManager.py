@@ -4,6 +4,7 @@
 # -------------------------------------
 
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -161,4 +162,42 @@ class SubprocessPytestManager(BaseTestRunner):
         self, args_str: str, timeout_seconds: float = 60.0
     ) -> TestResult:
         """Escape Hatch or fallback for pytest commands"""
-        pass
+        """
+        # First validate and tokenize
+        is_safe, tokens, error_msg = sanitize_and_tokenize(args_str)
+        if not is_safe:
+            return GitResult(
+                status=GitOpStatus.FORBIDDEN_ARGS,
+                raw_data=tokens,
+                error_details=error_msg,
+            )
+        """
+
+        tokens = shlex.split(args_str)
+
+        # Then build the executable array
+        command = ["pytest"] + tokens
+
+        try:
+            fallback_result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=True,
+            )
+
+        except subprocess.TimeoutExpired:
+            return TestResult(
+                status=TestOpStatus.TIMEOUT,
+                error_details=f"Command 'pytest {args_str}' timed out after {timeout_seconds} seconds.",
+            )
+
+        except subprocess.CalledProcessError as e:
+            return TestResult(
+                status=TestOpStatus.SUBPROCESS_ERROR, raw_data=e, error_details=e.stderr
+            )
+
+        return TestResult(
+            status=TestOpStatus.EXECUTED_FALLBACK_COMMAND, raw_data=fallback_result
+        )
