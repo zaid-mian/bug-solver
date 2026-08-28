@@ -13,10 +13,10 @@ class TestOpStatus(Enum):
     # ---------------------
     #  For run_tests
     # ---------------------
-    ALL_TESTS_PASSED = "tests_passed"
+    ALL_TESTS_PASSED = "all_tests_passed"
 
     # errors
-    SOME_TESTS_FAILED = "tests_failed"  # exit 1: ran but some failed
+    SOME_TESTS_FAILED = "some_tests_failed"  # exit 1: ran but some failed
     NO_TESTS_FOUND = "no_tests_found"  # exit 5
     INTERRUPTED = "interrupted"  # exit 2
     INTERNAL_ERROR = "internal_error"  # exit 3
@@ -25,7 +25,7 @@ class TestOpStatus(Enum):
     # ---------------------
     #  For collect_tests
     # ---------------------
-    ALL_COLLECTED_TESTS = "collected_tests"  # collect-only success
+    ALL_COLLECTED_TESTS = "all_collected_tests"  # collect-only success
 
     # errors
     COLLECTION_LEVEL_ERRORS = "collection_level_errors"  # code 1
@@ -35,7 +35,7 @@ class TestOpStatus(Enum):
     # -----------------------
     #  For run_test_command
     # -----------------------
-    COMMAND_SUCCESS = "command_success"
+    EXECUTED_FALLBACK_COMMAND = "executed_fallback_command"
 
     # errors
     TIMEOUT = "timeout"
