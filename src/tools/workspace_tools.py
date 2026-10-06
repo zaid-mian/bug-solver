@@ -159,4 +159,31 @@ def workspace_tools(filesystem_adapter: BaseFileSystemTools) -> list[BaseTool]:
             raw_data=result.raw_data,
         )
 
-    return [read_files, write_files, find_files, list_dir]
+    # ----------------------------------------
+    #  Tool 2b: Patch File (Search & Replace)
+    # ----------------------------------------
+    @tool(parse_docstring=True)
+    def patch_file(
+        file_path: str,
+        old_str: str,
+        new_str: str,
+    ) -> str:
+        """
+        Replaces a specific targeted snippet of code/text in a file with new code.
+        Prefer this over write_files when making focused bug fixes.
+
+        Args:
+            file_path: Path to the target file.
+            old_str: The exact code snippet to be replaced.
+            new_str: The replacement snippet.
+        """
+        from adapters.filesystem.types import FileOpStatus
+
+        result = filesystem_adapter.patch_file(
+            file_path=file_path, old_str=old_str, new_str=new_str
+        )
+        if result.status == FileOpStatus.PATCH_APPLIED:
+            return f"Successfully patched {file_path}: snippet replaced."
+        return f"Failed to patch {file_path}: {result.error_details}"
+
+    return [read_files, write_files, patch_file, find_files, list_dir]

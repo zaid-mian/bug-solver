@@ -15,9 +15,11 @@ class FileOpStatus(Enum):
     SUCCESSFULLY_READ_SOME_FILES = "successfully_read_some_files"
 
     # -------------------------
-    #  For write_files
+    #  For write_files and patch_file
     # -------------------------
     SUCCESSFULLY_WROTE_SOME_FILES = "successfully_wrote_some_files"
+    PATCH_APPLIED = "patch_applied"
+    PATCH_FAILED = "patch_failed"
 
     # -------------------------
     #  For find_files

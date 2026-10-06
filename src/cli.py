@@ -154,6 +154,7 @@ def run(
 
     # 3c: put the agent on a dedicated fix branch so the target repo's
     # current branch is never polluted
+    branch_name: str | None = None
     if new_branch and not local_only:
         branch_name = f"bugsolver/fix-{resolved_issue_id or 'local'}-{int(time.time())}"
         branch_result = git_manager.checkout_branch(branch_name, create_new=True)
@@ -161,6 +162,12 @@ def run(
 
     # 3d: the LLM: defaults to local Ollama, or uses Anthropic / OpenAI / Groq / OpenRouter
     from utils.model_factory import get_model
+    from utils.ui import (
+        print_banner,
+        print_node_result,
+        print_node_start,
+        print_summary_card,
+    )
 
     llm = get_model(provider=provider, model_name=model)
 
@@ -196,11 +203,60 @@ def run(
         "messages": [],
     }
 
-    # 6: Invoke the LangGraph Agent
-    typer.echo(f"Starting Bug Solver Agent on repository: {target_repo_path}")
-    result = app.invoke(initial_state, config=config)
+    # 6: Stream the LangGraph Agent with Rich UI
+    import asyncio
 
-    typer.echo(f"Workflow finished. Status {result.get('status')}")
+    mode_str = "Local (No Push/PR)" if local_only else ("Auto PR" if auto_pr else "Branch Only")
+    print_banner(
+        repo_path=target_repo_path,
+        provider=provider,
+        model=model,
+        mode=mode_str,
+    )
+
+    async def _stream_workflow():
+        final_state: dict = dict(initial_state)
+        nodes_executed: list[str] = []
+        step_idx = 1
+
+        async for chunk in app.astream(initial_state, config=config):
+            for node_name, state_update in chunk.items():
+                nodes_executed.append(node_name)
+                final_state.update(state_update)
+
+                print_node_start(node_name, step_num=step_idx, total_steps=5)
+
+                diff_snippet = None
+                if node_name == "Coder":
+                    try:
+                        status_res = git_manager.git_status()
+                        if status_res and status_res.raw_data:
+                            diff_snippet = str(status_res.raw_data)
+                    except Exception:
+                        pass
+
+                print_node_result(node_name, state_update, diff_snippet=diff_snippet)
+                step_idx += 1
+
+        return final_state, nodes_executed
+
+    try:
+        final_state, nodes_executed = asyncio.run(_stream_workflow())
+        final_status = final_state.get("status", "COMPLETED")
+    except Exception as e:
+        final_status = f"FAILED ({e})"
+        nodes_executed = []
+        final_state = {}
+
+    print_summary_card(
+        repo_path=str(target_repo_path),
+        task_desc=bug_description or f"GitHub Issue #{resolved_issue_id}",
+        final_status=str(final_status),
+        nodes_executed=nodes_executed,
+        retries=final_state.get("retry_count", 0),
+        branch_name=branch_name,
+        pr_url=final_state.get("pr_url"),
+    )
 
 
 if __name__ == "__main__":
