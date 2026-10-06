@@ -15,7 +15,7 @@ The following information is available in your conversation context:
 
 ### 1. Analyze test output
 Determine:
-- Did all tests pass? If `test_output` is a provisional inspection report (from the Test Runner's current limitation), judge based on that report.
+- Did all tests pass? Judge from the full test output the Test Runner recorded.
 - Which tests failed, and what were the error messages or tracebacks?
 - Are the failures caused by the Coder's changes, or were they pre-existing failures unrelated to this bug fix?
 
