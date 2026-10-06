@@ -4,7 +4,6 @@ import typer
 from typing import Annotated, Optional
 from pathlib import Path
 from git import Repo, InvalidGitRepositoryError
-from langchain_ollama import ChatOllama
 
 from constants import Status
 from agent.graph import app
@@ -69,8 +68,13 @@ def run(
         str, typer.Argument(help="Issue number or local bug description.")
     ],
     repo_name: Annotated[
-        str, typer.Argument("--name", "-n", help="The name of the GitHub repository")
-    ],
+        Optional[str],
+        typer.Option(
+            "--name",
+            "-n",
+            help="The GitHub repository as owner/repo (needed for issue mode and PRs).",
+        ),
+    ] = None,
     repo_path: Annotated[
         Optional[Path], typer.Option("--path", "-p", help="Path to local repository.")
     ] = None,  # standard default
@@ -146,6 +150,10 @@ def run(
 
     # 3d: the LLM. Defaults to a local Ollama model — no API keys needed.
     # Override with BUGSOLVER_MODEL / OLLAMA_HOST env vars.
+    # Imported lazily so `bugsolver --help` works even where the
+    # ollama client package cannot initialize (e.g. proxied envs).
+    from langchain_ollama import ChatOllama
+
     model = ChatOllama(
         model=os.environ.get("BUGSOLVER_MODEL", "qwen2.5-coder:7b"),
         base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),

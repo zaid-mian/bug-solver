@@ -11,11 +11,16 @@
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 from typing import List, Tuple
 
 from .base import BaseTestRunner
 from .types import TestResult, TestOpStatus
+
+# Invoke pytest via the current interpreter so the adapter works inside
+# virtualenvs and containers regardless of PATH.
+_PYTEST = [sys.executable, "-m", "pytest"]
 
 # Characters that only make sense for shell interpretation. The subprocess
 # calls below always use shell=False, but we reject them anyway so a
@@ -87,7 +92,7 @@ class SubprocessPytestManager(BaseTestRunner):
         outputs = []
 
         for target in targets:
-            cmd = ["pytest", target, "-v", "--tb=short"]
+            cmd = _PYTEST + [target, "-v", "--tb=short"]
             if keyword:
                 cmd += ["-k", keyword]
             try:
@@ -150,7 +155,7 @@ class SubprocessPytestManager(BaseTestRunner):
         targets = [str(p) for p in paths] if paths else ["."]
         outputs = []
         for target in targets:
-            cmd = ["pytest", "--collect-only", "-q", target]
+            cmd = _PYTEST + ["--collect-only", "-q", target]
             if keyword:
                 cmd += ["-k", keyword]
             try:
@@ -190,7 +195,7 @@ class SubprocessPytestManager(BaseTestRunner):
             )
 
         try:
-            result = self._run(["pytest"] + tokens, timeout_seconds)
+            result = self._run(_PYTEST + tokens, timeout_seconds)
         except subprocess.TimeoutExpired:
             return TestResult(
                 status=TestOpStatus.TIMEOUT,

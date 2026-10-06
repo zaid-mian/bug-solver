@@ -12,7 +12,7 @@ import pytest
 
 from adapters.testing.SubprocessPytestManager import SubprocessPytestManager
 from adapters.testing.types import TestOpStatus
-from tools.testing_tools import testing_tools
+from tools.testing_tools import testing_tools as make_testing_tools
 
 
 @pytest.fixture()
@@ -37,7 +37,7 @@ def mini_repo(tmp_path: Path) -> Path:
 
 
 def test_factory_exposes_three_tools(mini_repo):
-    tools = testing_tools(SubprocessPytestManager(repo_path=mini_repo))
+    tools = make_testing_tools(SubprocessPytestManager(repo_path=mini_repo))
     assert sorted(t.name for t in tools) == [
         "collect_tests",
         "run_test_command",

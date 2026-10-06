@@ -5,17 +5,12 @@ Returns a predefined response. Replace logic and configuration as needed.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from typing import Literal
 
-from dataclasses import dataclass
-from typing import Annotated, TypedDict, List, Optional, Literal
-from typing_extensions import TypedDict
-
-from langchain_core.messages import BaseMessage
-from langgraph.graph import StateGraph, START, END, add_messages
+from langgraph.graph import StateGraph, START, END
 
 from .nodes import planner, coder, test_runner, evaluator, pr_writer
+from .state import State
 
 # -------------------
 #  Import Constants
@@ -35,50 +30,6 @@ class Context(TypedDict):
 
     my_configurable_param: str
 '''
-
-
-# -------------------
-#  State Class
-# -------------------
-@dataclass
-class State(TypedDict):
-    """Input state for the agent.
-
-    Defines the initial structure of incoming data.
-    See: https://langchain-ai.github.io/langgraph/concepts/low_level/#state
-    """
-
-    # The issue id, if there is one
-    issue_id: Optional[int]
-
-    # The bug report, issue description, or error stack trace
-    issue_description: str
-
-    # The repository name and path
-    repo_name: str
-
-    repo_path: str | os.PathLike | Path
-
-    # Paths and code snippets from repo
-    relevant_files: List[str]
-
-    # The plan
-    fix_plan: Optional[str]
-
-    # Generated code fix/diff
-    patch_code: Optional[str]
-
-    # Log/errors from running tests
-    test_output: Optional[str]
-
-    # Integer tracking iteration cycles, to prevent infinite loops
-    retry_count: int
-
-    # Status
-    status: Status
-
-    # message history
-    messages: Annotated[list[BaseMessage], add_messages]
 
 
 '''

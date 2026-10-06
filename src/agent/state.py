@@ -1,0 +1,54 @@
+"""Shared agent state schema.
+
+Lives in its own module so both the graph definition (agent/graph.py) and
+the node implementations (agent/nodes.py) can import it without creating
+a circular import.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Annotated, List, Optional
+from typing_extensions import TypedDict
+
+from langchain_core.messages import BaseMessage
+from langgraph.graph import add_messages
+
+from constants import Status
+
+
+class State(TypedDict):
+    """Input state for the agent."""
+
+    # The issue id, if there is one
+    issue_id: Optional[int]
+
+    # The bug report, issue description, or error stack trace
+    issue_description: str
+
+    # The repository name and path
+    repo_name: str
+
+    repo_path: str | os.PathLike | Path
+
+    # Paths and code snippets from repo
+    relevant_files: List[str]
+
+    # The plan
+    fix_plan: Optional[str]
+
+    # Generated code fix/diff
+    patch_code: Optional[str]
+
+    # Log/errors from running tests
+    test_output: Optional[str]
+
+    # Integer tracking iteration cycles, to prevent infinite loops
+    retry_count: int
+
+    # Status
+    status: Status
+
+    # message history
+    messages: Annotated[list[BaseMessage], add_messages]

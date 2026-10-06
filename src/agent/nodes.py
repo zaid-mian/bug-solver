@@ -4,7 +4,7 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import ToolNode
 
-from .graph import State
+from .state import State
 
 # from .graph import Context
 
