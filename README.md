@@ -1,7 +1,8 @@
-# Bug Solver Agent
+# ⚡ Bug Solver Agent
 
 <div align="center">
 
+[![GitHub](https://img.shields.io/badge/GitHub-zaid--mian%2Fbug--solver-181717.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/zaid-mian/bug-solver)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-FF6F00.svg?style=for-the-badge&logo=langchain&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-36%20passed-22c55e.svg?style=for-the-badge&logo=pytest&logoColor=white)
@@ -15,7 +16,7 @@
   self-heals through iterative feedback loops, and opens verified GitHub Pull Requests.
 </p>
 
-[Quickstart](#-quickstart--installation) · [Architecture Flow](#-architecture-flow) · [Web Visualizer](#-interactive-web-dag-visualizer) · [CLI Showcase](#-cli-usage) · [SWE Benchmarks](#-reproducible-swe-benchmarks) · [Extensibility](#-pluggable-adapter-architecture)
+[Quickstart](#-quickstart--installation) · [Architecture Flow](#-architecture-flow) · [Live Terminal](#-live-terminal-experience) · [Web Visualizer](#-interactive-web-dag-visualizer) · [CLI Showcase](#-cli-usage) · [SWE Benchmarks](#-reproducible-swe-benchmarks) · [Extensibility](#-pluggable-adapter-architecture)
 
 </div>
 
@@ -37,6 +38,68 @@ Most AI coding assistants operate as single-turn auto-completes: they guess code
 
 ---
 
+## 🔄 Architecture Flow
+
+BugSolver is structured as a cyclical finite state machine orchestrated via **LangGraph**:
+
+```mermaid
+flowchart TD
+    subgraph INTAKE ["📥 Problem Ingestion"]
+        CLI["<b>Issue / Task Input</b><br/><code>bugsolver run 'Fix crash'</code><br/><i>Target Repo / Task / Issue #</i>"]
+    end
+
+    subgraph REPAIR_LOOP ["🔄 Autonomous LangGraph Repair Engine"]
+        Planner["🧠 <b>1. Planner Node</b><br/>• Codebase AST inspection<br/>• Root-cause diagnosis<br/>• Formulate ordered fix strategy<br/><i>Tools: read_files, find_files, git_grep</i>"]
+        
+        Coder["💻 <b>2. Coder Node</b><br/>• Surgical search-and-replace<br/>• Synthesize precision edits<br/>• Preserve surrounding indent & syntax<br/><i>Tools: patch_file, write_files</i>"]
+        
+        Tester["🧪 <b>3. Test Runner Node</b><br/>• SubprocessPytestManager sandbox<br/>• Command argument sanitization<br/>• Capture isolated stdout / stderr<br/><i>Tools: run_tests (pytest)</i>"]
+        
+        Evaluator{"⚖️ <b>4. Evaluator Node</b><br/>Test Outcome Assessment"}
+        
+        Planner -->|Diagnostic Plan| Coder
+        Coder -->|Patched Workspace| Tester
+        Tester -->|Pytest Output Logs| Evaluator
+
+        Evaluator -- "Condition 1: TESTS FAILED (Retries &le; 3)<br/><i>Self-Healing Diagnostic Feedback</i>" -->|Error Traceback Injection| Coder
+        Evaluator -- "Condition 2: EXHAUSTED (Retries > 3)<br/><i>Re-plan Fix Strategy from Scratch</i>" -->|Reset State & Fallback| Planner
+    end
+
+    subgraph VCS_DELIVERY ["🚀 5. VCS Delivery & Verification"]
+        PRWriter["<b>PR Writer Node</b><br/>• Check out fix branch<br/>• Stage & commit patch<br/>• Push branch & open verified PR<br/><i>Tools: git branch, commit, push, create_pr</i>"]
+    end
+
+    CLI --> Planner
+    Evaluator -- "Condition 0: ALL TESTS PASSED (100% Green)" --> PRWriter
+    PRWriter --> MERGED(["🎉 <b>Verified Pull Request Opened</b><br/><i>Branch: bugsolver/fix-*</i>"])
+
+    classDef intake fill:#0b1329,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef planner fill:#0c2d48,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
+    classDef coder fill:#2e240a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc;
+    classDef tester fill:#2d122e,stroke:#ec4899,stroke-width:2px,color:#f8fafc;
+    classDef evaluator fill:#092e1e,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef delivery fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+
+    class CLI intake;
+    class Planner planner;
+    class Coder coder;
+    class Tester tester;
+    class Evaluator evaluator;
+    class PRWriter delivery;
+    class MERGED success;
+```
+
+### The 5 Agent Nodes
+
+1. **🧠 Planner Node**: Analyzes the problem description, inspects the codebase using `read_files`, `find_files`, `list_dir`, and `git_grep`, and produces an ordered, minimal fix plan.
+2. **💻 Coder Node**: Synthesizes the fix. Uses precision `patch_file` (search & replace) or `write_files`. Never overwrites whole files when a targeted edit suffices.
+3. **🧪 Test Runner Node**: Discovers tests and invokes the test runner in an isolated subprocess. Scoped strictly to the target repository with argument sanitization (rejects `--pdb`, shell metacharacters).
+4. **⚖️ Evaluator Node**: Inspects stdout/stderr test output. If all tests pass, routes to `PR Writer` (condition `0`). If tests fail and `retry_count <= 3`, routes back to `Coder` with diagnostic context (condition `1`). If retries exceed limit, triggers re-planning (condition `2`).
+5. **🚀 PR Writer Node**: Checks out a dedicated fix branch (e.g. `bugsolver/fix-142`), stages files, commits with a conventional message, pushes to origin, and opens a GitHub Pull Request.
+
+---
+
 ## 🖥️ Live Terminal Experience
 
 When running `bugsolver run`, the CLI streams real-time state transitions through high-contrast, rich terminal cards:
@@ -44,7 +107,7 @@ When running `bugsolver run`, the CLI streams real-time state transitions throug
 ```text
 ╭──────────────────────────────────────────────────────────────────────────╮
 │ ⚡ BUG SOLVER AGENT — Autonomous SWE-bench Repair Loop                   │
-│ Repository: E:\bug-solver-complete\benchmarks\fixtures\null_guard         │
+│ Repository: ./benchmarks/fixtures/null_guard                             │
 │ Provider: ollama  Model: qwen2.5-coder:7b  Mode: Local (No Push/PR)      │
 ╰──────────────────────────────────────────────────────────────────────────╯
 
@@ -75,7 +138,7 @@ When running `bugsolver run`, the CLI streams real-time state transitions throug
 ╭──────────────────────┬───────────────────────────────────────────────────╮
 │ Property             │ Value                                             │
 ├──────────────────────┼───────────────────────────────────────────────────┤
-│ Target Repository    │ E:\bug-solver-complete\benchmarks\fixtures\...   │
+│ Target Repository    │ ./benchmarks/fixtures/null_guard                  │
 │ Task / Issue         │ src/calculator.py crashes with TypeError on None  │
 │ Final Status         │ ✔ SUCCESS (Resolved)                              │
 │ Workflow Path        │ Planner ➔ Coder ➔ Test Runner ➔ Evaluator ➔ PR    │
@@ -84,46 +147,15 @@ When running `bugsolver run`, the CLI streams real-time state transitions throug
 ╰──────────────────────┴───────────────────────────────────────────────────╯
 ```
 
----
+### 🔍 Terminal Observability Architecture
 
-## 🔄 Architecture Flow
-
-BugSolver is structured as a cyclical finite state machine orchestrated via **LangGraph**:
-
-```mermaid
-graph TD
-    START([START]) --> Planner[🧠 Planner\nDiagnosis & Strategy Formulation]
-    Planner --> Coder[💻 Coder\nSurgical Patch Synthesis & Tooling]
-    Coder --> Tester[🧪 Test Runner\nIsolated Pytest Subprocess Sandbox]
-    Tester --> Evaluator[⚖️ Evaluator\nOutcome Verdict & Route Decision]
-
-    Evaluator -- "0: SUCCESS (All Tests Passed)" --> PRWriter[🚀 PR Writer\nCommit, Branch & GitHub PR]
-    Evaluator -- "1: FAILED (Attempts &le; 3)" --> Coder
-    Evaluator -- "2: EXHAUSTED (Re-plan from scratch)" --> Planner
-
-    PRWriter --> END([END])
-
-    classDef default fill:#1e293b,stroke:#475569,stroke-width:2px,color:#fff;
-    classDef cyan fill:#0f2744,stroke:#06b6d4,stroke-width:2px,color:#fff;
-    classDef yellow fill:#2d2410,stroke:#fbbf24,stroke-width:2px,color:#fff;
-    classDef magenta fill:#2d142c,stroke:#ec4899,stroke-width:2px,color:#fff;
-    classDef green fill:#0d2818,stroke:#10b981,stroke-width:2px,color:#fff;
-    classDef blue fill:#101f3c,stroke:#3b82f6,stroke-width:2px,color:#fff;
-
-    class Planner cyan;
-    class Coder yellow;
-    class Tester magenta;
-    class Evaluator green;
-    class PRWriter blue;
-```
-
-### The 5 Agent Nodes
-
-1. **🧠 Planner Node**: Analyzes the problem description, inspects the codebase using `read_files`, `find_files`, `list_dir`, and `git_grep`, and produces an ordered, minimal fix plan.
-2. **💻 Coder Node**: Synthesizes the fix. Uses precision `patch_file` (search & replace) or `write_files`. Never overwrites whole files when a targeted edit suffices.
-3. **🧪 Test Runner Node**: Discovers tests and invokes the test runner in an isolated subprocess. Scoped strictly to the target repository with argument sanitization (rejects `--pdb`, shell metacharacters).
-4. **⚖️ Evaluator Node**: Inspects stdout/stderr test output. If all tests pass, routes to `PR Writer` (condition `0`). If tests fail and `retry_count <= 3`, routes back to `Coder` with diagnostic context (condition `1`). If retries exceed limit, triggers re-planning (condition `2`).
-5. **🚀 PR Writer Node**: Checks out a dedicated fix branch (e.g. `bugsolver/fix-142`), stages files, commits with a conventional message, pushes to origin, and opens a GitHub Pull Request.
+| Component | Visual Representation | Engineering Value |
+|---|---|---|
+| **Header Card** | Bordered Rich card with active repository, provider, and model | Prevents running against unintended paths or burning paid tokens unintentionally |
+| **Step Banners** | Distinct numbered emojis `[1/5]` to `[5/5]` | Instant visual recognition of current LangGraph state node |
+| **Surgical Diff Panel** | Inline syntax-highlighted git diff box | Eliminates whole-file code replacement errors; provides auditable proof of changes |
+| **Sandbox Logger** | Live subprocess pytest output streamer | Verifies test executions in isolated subprocesses without stdout pollution |
+| **Scorecard Summary** | Tabular property-value execution report | Produces deterministic summary records for CI/CD runs and local developer audits |
 
 ---
 
@@ -150,7 +182,7 @@ bugsolver ui
 
 ```bash
 # Clone the repository
-git clone https://github.com/sawyer-anderson1/bug-solver.git
+git clone https://github.com/zaid-mian/bug-solver.git
 cd bug-solver
 
 # Install in editable mode
@@ -336,6 +368,8 @@ docker run --rm -e OLLAMA_HOST=host.docker.internal \
 
 ## 📜 Attribution & License
 
-- Original architectural concept & scaffolding by [Sawyer Anderson](https://github.com/sawyer-anderson1/bug-solver) (MIT).
-- Hardened, expanded, and productionized with multi-provider LLM support, interactive Web DAG visualizer, surgical patching, and SWE test harnesses.
+- Author & Maintainer: **Muhammad Zaid Tahir** ([@zaid-mian](https://github.com/zaid-mian)).
+- Repository: [https://github.com/zaid-mian/bug-solver](https://github.com/zaid-mian/bug-solver)
+- Foundational architectural scaffolding by [Sawyer Anderson](https://github.com/sawyer-anderson1/bug-solver) (MIT).
+- Hardened and productionized into a complete autonomous SWE-bench repair loop with multi-provider LLM support, interactive Web DAG visualizer, surgical `patch_file` edits, and turnkey benchmark suites.
 - Released under the [MIT License](LICENSE).
