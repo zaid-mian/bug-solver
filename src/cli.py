@@ -1,14 +1,17 @@
 import os
+import time
 import typer
 from typing import Annotated, Optional
 from pathlib import Path
 from git import Repo, InvalidGitRepositoryError
+from langchain_ollama import ChatOllama
 
 from constants import Status
 from agent.graph import app
 from adapters.git.SubprocessGitManager import SubprocessGitManager
 from adapters.filesystem.PATHLIBPythonManager import PATHLIBPythonManager
 from adapters.platform.PyGithubManager import PyGithubManager
+from adapters.testing.SubprocessPytestManager import SubprocessPytestManager
 
 from adapters.git.types import GitResult, GitOpStatus
 from adapters.filesystem.types import FileSystemResult, FileOpStatus
@@ -111,14 +114,14 @@ def run(
     workspace_manager: FileSystemResult = PATHLIBPythonManager(root=target_repo_path)
 
     github_token = os.environ.get("GITHUB_TOKEN")
-    github_manager: GitHubClientResult = (
+    github_manager = (
         PyGithubManager(token=github_token, repo_name=repo_name)
         if github_token and repo_name
         else None
     )
 
     # check if the initialization of the GitHub client failed was a success
-    if github_manager.status != GitHubOpStatus.INIT_GITHUB_CLIENT:
+    if github_manager is not None and github_manager.status != GitHubOpStatus.INIT_GITHUB_CLIENT:
         # then raise an error message
         typer.echo(
             (
@@ -130,13 +133,33 @@ def run(
             err=True,
         )
 
+    # 3b: test runner adapter (scoped to the target repo so test commands
+    # can never escape into the agent's own working directory)
+    test_manager = SubprocessPytestManager(repo_path=target_repo_path)
+
+    # 3c: put the agent on a dedicated fix branch so the target repo's
+    # current branch is never polluted
+    if new_branch and not local_only:
+        branch_name = f"bugsolver/fix-{resolved_issue_id or 'local'}-{int(time.time())}"
+        branch_result = git_manager.checkout_branch(branch_name, create_new=True)
+        typer.echo(f"Created fix branch: {branch_name} ({branch_result.status})")
+
+    # 3d: the LLM. Defaults to a local Ollama model — no API keys needed.
+    # Override with BUGSOLVER_MODEL / OLLAMA_HOST env vars.
+    model = ChatOllama(
+        model=os.environ.get("BUGSOLVER_MODEL", "qwen2.5-coder:7b"),
+        base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
+    )
+
     # 4: Construct RunnableConfig (Execution Environment)
     config = {
         "configurable": {
+            "model": model,
             "adapters": {
                 "git_manager": git_manager,
                 "workspace_manager": workspace_manager,
                 "github_manager": github_manager,
+                "test_manager": test_manager,
             },
             "execution_mode": {
                 "auto_pr": auto_pr and not local_only,

@@ -98,12 +98,20 @@ async def call_model(state: State, runtime: Runtime[Context]) -> Dict[str, Any]:
 #  Conditional Function
 # ------------------------
 def check_status(state: State) -> Literal[0, 1, 2]:
-    if Status.FAILED in state["status"]:
+    """Route after the Evaluator node.
+
+    0 -> PR Writer (fix verified), 1 -> Coder (try again),
+    2 -> Planner (retries exhausted, re-plan from scratch).
+    """
+    if state["status"] == Status.FAILED:
         return 1
-    elif Status.SUCCESS in state["status"]:
+    if state["status"] == Status.SUCCESS:
         return 0
-    elif Status.IN_PROGRESS or state["retry_count"] > MAX_RETRIES:
+    # IN_PROGRESS or unexpected: only re-plan when retries are exhausted,
+    # otherwise give the Coder another attempt.
+    if state["retry_count"] > MAX_RETRIES:
         return 2
+    return 1
 
 
 # -----------------------
