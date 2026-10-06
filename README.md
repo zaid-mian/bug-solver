@@ -43,51 +43,46 @@ Most AI coding assistants operate as single-turn auto-completes: they guess code
 BugSolver is structured as a cyclical finite state machine orchestrated via **LangGraph**:
 
 ```mermaid
-flowchart TD
-    subgraph INTAKE ["📥 Problem Ingestion"]
-        CLI["<b>Issue / Task Input</b><br/><code>bugsolver run 'Fix crash'</code><br/><i>Target Repo / Task / Issue #</i>"]
-    end
+graph TD
+    CLI(["📥 Problem Intake: CLI / GitHub Issue<br/>bugsolver run 'Fix bug'"]) --> Planner
 
-    subgraph REPAIR_LOOP ["🔄 Autonomous LangGraph Repair Engine"]
-        Planner["🧠 <b>1. Planner Node</b><br/>• Codebase AST inspection<br/>• Root-cause diagnosis<br/>• Formulate ordered fix strategy<br/><i>Tools: read_files, find_files, git_grep</i>"]
-        
-        Coder["💻 <b>2. Coder Node</b><br/>• Surgical search-and-replace<br/>• Synthesize precision edits<br/>• Preserve surrounding indent & syntax<br/><i>Tools: patch_file, write_files</i>"]
-        
-        Tester["🧪 <b>3. Test Runner Node</b><br/>• SubprocessPytestManager sandbox<br/>• Command argument sanitization<br/>• Capture isolated stdout / stderr<br/><i>Tools: run_tests (pytest)</i>"]
-        
-        Evaluator{"⚖️ <b>4. Evaluator Node</b><br/>Test Outcome Assessment"}
-        
+    subgraph ENGINE ["🔄 LangGraph Cyclical Repair Loop"]
+        Planner["🧠 1. Planner Node<br/>Codebase Inspection & Fix Strategy<br/>Tools: read_files, find_files, git_grep"]
+        Coder["💻 2. Coder Node<br/>Surgical Patch Synthesis<br/>Tools: patch_file, write_files"]
+        Tester["🧪 3. Test Runner Node<br/>Isolated Pytest Sandbox<br/>Tools: SubprocessPytestManager"]
+        Evaluator{"⚖️ 4. Evaluator Node<br/>Outcome Verification"}
+
         Planner -->|Diagnostic Plan| Coder
         Coder -->|Patched Workspace| Tester
         Tester -->|Pytest Output Logs| Evaluator
 
-        Evaluator -- "Condition 1: TESTS FAILED (Retries &le; 3)<br/><i>Self-Healing Diagnostic Feedback</i>" -->|Error Traceback Injection| Coder
-        Evaluator -- "Condition 2: EXHAUSTED (Retries > 3)<br/><i>Re-plan Fix Strategy from Scratch</i>" -->|Reset State & Fallback| Planner
+        Evaluator -- "Condition 1: Tests Failed (Self-Healing Loop)" --> Coder
+        Evaluator -- "Condition 2: Retries Exhausted (Re-plan)" --> Planner
     end
 
-    subgraph VCS_DELIVERY ["🚀 5. VCS Delivery & Verification"]
-        PRWriter["<b>PR Writer Node</b><br/>• Check out fix branch<br/>• Stage & commit patch<br/>• Push branch & open verified PR<br/><i>Tools: git branch, commit, push, create_pr</i>"]
+    subgraph DELIVERY ["🚀 VCS Finalization & Delivery"]
+        PRWriter["🚀 5. PR Writer Node<br/>Branch, Commit & Pull Request<br/>Tools: PyGithub, Git CLI"]
     end
 
-    CLI --> Planner
-    Evaluator -- "Condition 0: ALL TESTS PASSED (100% Green)" --> PRWriter
-    PRWriter --> MERGED(["🎉 <b>Verified Pull Request Opened</b><br/><i>Branch: bugsolver/fix-*</i>"])
+    Evaluator -- "Condition 0: All Tests Passed" --> PRWriter
+    PRWriter --> DONE(["🎉 Verified Pull Request Opened<br/>Branch: bugsolver/fix-*"])
 
-    classDef intake fill:#0b1329,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
-    classDef planner fill:#0c2d48,stroke:#06b6d4,stroke-width:2px,color:#f8fafc;
-    classDef coder fill:#2e240a,stroke:#fbbf24,stroke-width:2px,color:#f8fafc;
-    classDef tester fill:#2d122e,stroke:#ec4899,stroke-width:2px,color:#f8fafc;
-    classDef evaluator fill:#092e1e,stroke:#10b981,stroke-width:2px,color:#f8fafc;
-    classDef delivery fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
-    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+    classDef default fill:#111827,stroke:#374151,stroke-width:2px,color:#f9fafb;
+    classDef startNode fill:#0f2744,stroke:#38bdf8,stroke-width:2px,color:#f9fafb;
+    classDef plannerNode fill:#0c2d48,stroke:#06b6d4,stroke-width:2px,color:#f9fafb;
+    classDef coderNode fill:#2e240a,stroke:#fbbf24,stroke-width:2px,color:#f9fafb;
+    classDef testerNode fill:#2d122e,stroke:#ec4899,stroke-width:2px,color:#f9fafb;
+    classDef evalNode fill:#092e1e,stroke:#10b981,stroke-width:2px,color:#f9fafb;
+    classDef deliveryNode fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#f9fafb;
+    classDef doneNode fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f9fafb;
 
-    class CLI intake;
-    class Planner planner;
-    class Coder coder;
-    class Tester tester;
-    class Evaluator evaluator;
-    class PRWriter delivery;
-    class MERGED success;
+    class CLI startNode;
+    class Planner plannerNode;
+    class Coder coderNode;
+    class Tester testerNode;
+    class Evaluator evalNode;
+    class PRWriter deliveryNode;
+    class DONE doneNode;
 ```
 
 ### The 5 Agent Nodes
