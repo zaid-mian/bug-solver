@@ -1,8 +1,8 @@
 # Bug Solver Agent
 
-A CLI-driven, autonomous **bug-fixing agent** built on [LangGraph](https://github.com/langchain-ai/langgraph). Point it at a local repository (or a GitHub issue), and it plans a fix, writes the code, runs the tests, evaluates the result, and — optionally — commits, pushes, and opens a Pull Request.
+A CLI-driven, autonomous **bug-fixing agent** built on [LangGraph](https://github.com/langchain-ai/langgraph). Point it at a local repository (or a GitHub issue), and it plans a fix, writes the code, runs the tests, evaluates the result, and — optionally — commits, pushes, and opens a Pull Request. Runs on local models via [Ollama](https://ollama.com): **no API keys needed.**
 
-> ⚠️ **Work in progress.** The graph, adapters, tools, and skill prompts are wired up. Node functions for Coder, Test Runner, Evaluator, and PR Writer are still placeholder stubs. A shell-execution tool for the Test Runner is not yet implemented.
+> **Attribution:** this project was originally scaffolded by [Sawyer Anderson](https://github.com/sawyer-anderson1/bug-solver) (MIT) — the graph topology, adapters, tool bridges, and skill prompts. It was stalled with the core agent logic unimplemented. I completed and productionized it: implemented the three stub nodes, added the missing test-execution tooling, fixed packaging and routing bugs, and added tests, benchmarks, and Docker support. The original [LICENSE](LICENSE) is preserved.
 
 ## How it works
 
@@ -17,139 +17,96 @@ START → Planner → Coder → Test Runner → Evaluator ─┬─ (success) �
 
 - **Planner** — analyzes the issue/bug description and locates relevant files, producing a fix plan.
 - **Coder** — generates the code patch for the plan.
-- **Test Runner** — runs the test suite and captures output.
-- **Evaluator** — inspects test results and decides the next step via `check_status`:
-  - `SUCCESS` → move on to **PR Writer**
-  - `FAILED` → loop back to **Coder** to try again
-  - retry count exceeds `MAX_RETRIES` → loop back to **Planner** to re-plan
-- **PR Writer** — commits, pushes, and opens the Pull Request (when not in local-only mode).
+- **Test Runner** — discovers the test setup, executes the tests in a sandbox, and records the full output.
+- **Evaluator** — judges the test output: `SUCCESS` → PR Writer, `FAILED` → back to Coder with a diagnostic. After `MAX_RETRIES`, routes back to Planner for a fresh plan.
+- **PR Writer** — commits on a dedicated `bugsolver/fix-*` branch, pushes, opens a Pull Request, and comments on the issue (skipped in `--local-only` mode).
 
-The graph is defined in [src/agent/graph.py](src/agent/graph.py). Node functions live in [src/agent/nodes.py](src/agent/nodes.py). Shared constants (`MAX_RETRIES`, the `Status` enum) live in [src/constants.py](src/constants.py).
+### Safety design
 
-### State
+The agent runs tests and git commands, so it is sandboxed by construction:
 
-The workflow state ([`State`](src/agent/graph.py)) tracks the issue id/description, repo path, relevant files, the fix plan, the generated patch, test output, a retry counter, and the current `Status`.
+- Test commands run with `cwd` scoped to the target repo, `shell=False`, a timeout, and an argument sanitizer (shell metacharacters and interactive flags like `--pdb` are rejected).
+- Git operations go through an adapter with `shlex` tokenization and banned flags/subcommands (`--exec`, `config`, `bisect`, …).
+- The agent works on a dedicated fix branch — your current branch is never touched.
+
+## Setup
+
+```bash
+# 1. Install Ollama and pull a code model (CPU-friendly default)
+ollama pull qwen2.5-coder:7b
+
+# 2. Install the agent
+pip install .
+
+# 3. (Optional) for GitHub issue mode + PR creation
+export GITHUB_TOKEN=ghp_...
+```
+
+## Usage
+
+```bash
+# Fix a GitHub issue end-to-end (branch, fix, test, PR)
+bugsolver run 142 --name owner/repo --pr
+
+# Fix a locally-described bug, keep everything local
+bugsolver run "Fix memory leak in parser" --name owner/repo --local-only
+
+# Point at a different repo than the current directory
+bugsolver run 142 --name owner/repo --path /path/to/repo --pr
+```
+
+Environment overrides: `BUGSOLVER_MODEL` (default `qwen2.5-coder:7b`), `OLLAMA_HOST` (default `http://localhost:11434`).
+
+## What was completed (vs. the original scaffold)
+
+| Component | Original state | Completed |
+|---|---|---|
+| Test Runner node | `return "Placeholder"` stub | Real ReACT node: discovers, runs, and records tests |
+| Evaluator node | `return "Placeholder"` stub | Real judgment node with retry accounting |
+| PR Writer node | `return "Placeholder"` stub | Commit → push → PR → issue comment, mode-aware |
+| Test execution tool | Not implemented (README said so) | Sandboxed `run_tests` / `collect_tests` / `run_test_command` tools |
+| `check_status` router | Always routed to Planner on retry (bug) | Correct SUCCESS → PR, FAILED → Coder, exhausted → Planner |
+| Model wiring | `config["configurable"]["model"]` never provided (would crash) | Ollama wired in, zero API keys |
+| Packaging | Broken template `pyproject.toml` (wouldn't install) | Real metadata, deps, `bugsolver` entry point |
+| Tests | ~41 lines, effectively empty | Unit tests: router, sanitizer, tool factory e2e |
+| Evaluation | None | `benchmarks/run_benchmark.py` → fix-rate scorecard |
+| Deployment | None | Dockerfile |
+
+## Benchmark
+
+```bash
+python benchmarks/run_benchmark.py benchmarks/tasks.example.json --output benchmarks/results/
+# writes results.json + scorecard.md (fix rate, attempts, duration per task)
+```
+
+Benchmarks always run in `--local-only` mode: the agent may commit on its fix branch but never pushes or opens PRs.
+
+## Docker
+
+```bash
+docker build -t bug-solver .
+docker run --rm -e OLLAMA_HOST=host.docker.internal \
+  -v /path/to/target/repo:/target -w /target bug-solver \
+  run "Fix the null guard in parser" --name owner/repo --local-only
+```
 
 ## Architecture
-
-The agent talks to the outside world (Git, the filesystem, GitHub) through **adapter interfaces**, so the underlying implementation can be swapped without touching node logic.
 
 ```
 src/
 ├── agent/
 │   ├── graph.py            # LangGraph state, nodes, edges, conditional routing
-│   └── nodes.py            # Async node function implementations
+│   └── nodes.py            # Node implementations (planner, coder, test_runner, evaluator, pr_writer)
 ├── adapters/               # Pluggable interfaces to the outside world
-│   ├── git/                # Local Git operations
-│   │   ├── base.py         #   BaseGitRepo abstract interface
-│   │   ├── types.py        #   GitResult / GitOpStatus typed results
-│   │   ├── security.py     #   arg sanitizer for the escape-hatch tool
-│   │   ├── SubprocessGitManager.py   # concrete impl via `subprocess`
-│   │   └── GitPythonManager.py       # concrete impl via GitPython (stubbed)
-│   ├── filesystem/         # Local filesystem operations (read/write/find/list)
-│   │   ├── base.py         #   BaseFileSystemTools abstract interface
-│   │   ├── types.py        #   FileSystemResult / FileOpStatus typed results
-│   │   └── PATHLIBPythonManager.py   # concrete impl via pathlib
-│   └── platform/           # Web platform (GitHub) operations
-│       ├── base.py         #   BaseGitHubClient abstract interface
-│       ├── types.py        #   GitHubClientResult / GitHubOpStatus typed results
-│       └── PyGithubManager.py        # concrete impl via PyGithub
+│   ├── git/                # Local Git operations (subprocess impl + security sanitizer)
+│   ├── filesystem/         # Local filesystem operations (pathlib impl)
+│   ├── platform/           # GitHub operations (PyGithub impl)
+│   └── testing/            # Test execution (sandboxed pytest runner)
 ├── skills/                 # Per-node system prompts and templated tool responses
-│   ├── planner/            #   SKILL.md + responses/*.md templates
-│   ├── coder/              #   SKILL.md + responses/*.md templates
-│   ├── evaluator/          #   SKILL.md
-│   ├── test_runner/        #   SKILL.md
-│   └── pr_writer/          #   SKILL.md + responses/*.md templates
-├── tools/                  # LangChain tool wrappers over the adapters
-│   ├── git_tools.py        #   git_tools(adapter) factory → 8 tools
-│   ├── github_tools.py     #   github_tools(adapter) factory → 4 tools
-│   └── workspace_tools.py  #   workspace_tools(adapter) factory → 4 tools
-├── utils/
-│   ├── template_loader.py  # loads a `##` section from a skill response .md
-│   └── prompt_loader.py    # loads a node's SKILL.md as its system prompt
-├── constants.py
+├── tools/                  # LangChain tool factories over the adapters
+├── utils/                  # Prompt/template loaders
+├── constants.py            # MAX_RETRIES, Status enum
 └── cli.py                  # Typer CLI entrypoint
 ```
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for a component-by-component status and the remaining steps.
-
-### Adapters
-
-Each adapter domain exposes an abstract base class that the graph depends on:
-
-- **`BaseGitRepo`** — `list_local_branches`, `checkout_branch`, `apply_patch_or_commit`, `push`, `pull`, `git_status`, `search_repo_text` (a `git grep` over the repo's Python/Markdown sources), plus `run_git_command` (a security-gated **escape hatch** for complex situations the standard tools don't cover). Every operation returns a typed `GitResult(status: GitOpStatus, raw_data, error_details)` so nodes can branch on rich, structured outcomes — the `GitOpStatus` enum enumerates a distinct status per known failure mode (e.g. `BRANCH_EXISTS_REMOTELY`, `GITIGNORE_ERROR`, `NON_FAST_FORWARD`, `MERGE_CONFICT`, `FORBIDDEN_ARGS`), each mapped to an actionable response template. `SubprocessGitManager` implements the full interface with the `git` CLI; `GitPythonManager` is a GitPython-based alternative (still stubbed). The escape hatch runs `git` with `shell=False` and passes args through [`security.sanitize_and_tokenize`](src/adapters/git/security.py), which `shlex`-tokenizes the input and blocks dangerous flags (`-c`, `--exec`, `--upload-pack`, …) and subcommands (`config`, `bisect`, …).
-- **`BaseFileSystemTools`** — `read_files`, `write_files`, `find_files`, `list_dir`. Implemented by `PATHLIBPythonManager` using Python's `pathlib`.
-- **`BaseGitHubClient`** — `get_issue`, `create_pull_request`, `get_default_branch`, `post_issue_comment`. Implemented by `PyGithubManager` using the [PyGithub](https://github.com/PyGithub/PyGithub) library.
-
-### Tools
-
-The [tools/](src/tools/) layer bridges the adapters to the LLM via dependency-injecting factory functions. Each factory accepts an adapter implementation and returns a list of LangChain `@tool`s to bind to a graph node. Tool calls return human-readable responses rendered from the markdown response templates under `skills/<node>/responses/` — so the adapter returns *typed data* and the tool layer decides *how the agent hears about it*.
-
-| Factory | Tools | Primary node(s) |
-| --- | --- | --- |
-| `git_tools(git_adapter)` | `list_local_branches`, `checkout_branch`, `stage_patch_and_commit`, `push`, `pull`, `git_grep`, `git_status`, `git_fallback` | Planner, PR Writer |
-| `github_tools(github_adapter)` | `get_issue`, `create_pull_request`, `get_default_branch`, `post_issue_comment` | Planner, PR Writer |
-| `workspace_tools(filesystem_adapter)` | `read_files`, `write_files`, `find_files`, `list_dir` | Planner, Coder |
-
-`git_fallback` is an escape hatch that runs any `git` subcommand (with `shell=False`) after passing arguments through [`security.sanitize_and_tokenize`](src/adapters/git/security.py), which blocks dangerous flags and subcommands. It is available to all nodes, not just PR Writer.
-
-### Skills & templated responses
-
-Each node has a `skills/<node>/SKILL.md` system prompt loaded at runtime by [`prompt_loader.py`](src/utils/prompt_loader.py). Tools return human/agent-readable responses rendered from markdown templates under `skills/<node>/responses/` (e.g. `branch_checkout.md`, `commit.md`, `push.md`, `pull.md`, `status.md`, `grep_repo.md`, `local_branches.md`, `fallback.md`). [`template_loader.py`](src/utils/template_loader.py) extracts the `##` section matching a result's `GitOpStatus` — for example, [planner/responses/branch_checkout.md](src/skills/planner/responses/branch_checkout.md) maps each status to an explanatory, often action-prompting message the agent can act on.
-
-## CLI
-
-The entrypoint is a [Typer](https://typer.tiangolo.com/) app in [src/cli.py](src/cli.py). The `run` command takes a **target** — either a numeric GitHub issue number or a prose bug description — and a required **repo name** (`owner/repo`), then resolves the repository, wires up the adapters, and invokes the graph.
-
-```bash
-# Mode 1: Fetch issue #142 from GitHub, fix locally, push & open a PR
-bugsolver run 142 my-org/my-repo --pr
-
-# Mode 2: Fix a local bug described in prose, local-only (no push/PR)
-bugsolver run "Fix memory leak in parser" my-org/my-repo --local-only
-
-# Mode 3: Keep changes local without pushing
-bugsolver run 142 my-org/my-repo --local-only
-```
-
-Options:
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `--path`, `-p` | current repo root | Path to the local repository. |
-| `--new-branch / --no-new-branch` | `--new-branch` | Create a new branch vs. use the current one. |
-| `--pr / --no-pr` | `--pr` | Automatically open a Pull Request on GitHub. |
-| `--local-only` | `False` | Keep changes local (no push/PR). |
-
-The GitHub client is only wired up when a `GITHUB_TOKEN` environment variable is present and a repo name is supplied.
-
-## Getting started
-
-1. Install dependencies, along with the [LangGraph CLI](https://langchain-ai.github.io/langgraph/concepts/langgraph_cli/):
-
-```bash
-cd path/to/bug-solver
-pip install -e . "langgraph-cli[inmem]"
-```
-
-2. Create a `.env` file for secrets:
-
-```bash
-cp .env.example .env
-```
-
-```text
-# .env
-GITHUB_TOKEN=ghp_...          # required for issue fetching / PR creation
-LANGSMITH_API_KEY=lsv2...     # optional, enables LangSmith tracing
-```
-
-3. Iterate on the graph in [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/):
-
-```bash
-langgraph dev
-```
-
-## Development
-
-While iterating in LangGraph Studio, you can edit past state and re-run from previous states to debug specific nodes; local changes hot-reload. For more, see the [LangGraph documentation](https://langchain-ai.github.io/langgraph/).
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the original author's component status (note: some items are now done — the table above is the current truth).
