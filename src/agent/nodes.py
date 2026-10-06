@@ -295,7 +295,79 @@ async def evaluator(state: State, config: RunnableConfig):
 
 
 # ---------------------------
-#  Coder PR Writer Function
+#  PR Writer Node Function
 # ---------------------------
 async def pr_writer(state: State, config: RunnableConfig):
-    return "Placeholder"
+    """PR Writer node: commits the verified fix, pushes the fix branch, and
+    opens a Pull Request (unless running in local-only mode)."""
+
+    # 1. Dynamically load the skill prompt from src/skills/pr_writer/SKILL.md
+    system_prompt_text = load_skill_prompt("pr_writer")
+
+    # 2. Get bound tools for this specific domain node
+    adapters = config["configurable"]["adapters"]
+    bound_git_tools = git_tools(adapters["git_manager"])
+    tools = bound_git_tools
+
+    github_manager = adapters.get("github_manager")
+    if github_manager is not None:
+        bound_github_tools = github_tools(github_manager)
+        tools = tools + bound_github_tools
+
+    # extract tools by name for the ReACT loop
+    tools_by_name = {t.name: t for t in tools}
+
+    # 3. Bind tools to model and invoke with system prompt + conversation history
+    llm_with_tools = config["configurable"]["model"].bind_tools(tools)
+
+    # seed the conversation with runtime context the prompt expects
+    execution_mode = config["configurable"].get("execution_mode", {})
+    context_seed = (
+        f"relevant_files: {state.get('relevant_files')}\n"
+        f"patch_code: {state.get('patch_code')}\n"
+        f"fix_plan: {state.get('fix_plan')}\n"
+        f"issue_id: {state.get('issue_id')}\n"
+        f"repo_name: {state.get('repo_name')}\n"
+        f"execution_mode.local_only: {execution_mode.get('local_only')}\n"
+        f"execution_mode.auto_pr: {execution_mode.get('auto_pr')}\n"
+        f"github_available: {github_manager is not None}\n"
+    )
+    if github_manager is None:
+        context_seed += (
+            "\nNOTE: No GitHub client is configured (missing GITHUB_TOKEN). "
+            "Commit the fix locally and skip push / pull-request / issue-comment steps.\n"
+        )
+    messages = [
+        SystemMessage(content=system_prompt_text + "\n\n" + context_seed),
+        *state["messages"],
+    ]
+
+    # -----------------------
+    #  ReACT loop
+    # -----------------------
+    while True:
+        response = await llm_with_tools.ainvoke(messages)
+
+        messages.append(response)
+
+        if not response.tool_calls:
+            break  # The LLM is done calling tools (no tool_calls)
+
+        for tool_call in response.tool_calls:
+            result = await tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
+            messages.append(
+                ToolMessage(content=str(result), tool_call_id=tool_call["id"])
+            )
+
+    # Then extract the structured state from the final message (or a follow-up call)
+    content = response.content.strip()
+    if content.startswith("```"):
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+    final_data = json.loads(content.strip())
+
+    return {
+        "status": final_data["status"],
+        "messages": messages,
+    }
