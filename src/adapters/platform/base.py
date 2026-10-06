@@ -5,7 +5,7 @@
 
 from abc import ABC, abstractmethod
 
-from .types import GitHubClientResult, GitHubOpStatus
+from .types import GitHubClientResult
 
 
 class BaseGitHubClient(ABC):

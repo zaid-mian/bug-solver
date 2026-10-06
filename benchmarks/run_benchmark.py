@@ -33,28 +33,26 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from langchain_ollama import ChatOllama  # noqa: E402
-
-from constants import Status  # noqa: E402
-from agent.graph import app  # noqa: E402
-from adapters.git.SubprocessGitManager import SubprocessGitManager  # noqa: E402
 from adapters.filesystem.PATHLIBPythonManager import PATHLIBPythonManager  # noqa: E402
-from adapters.testing.SubprocessPytestManager import SubprocessPytestManager  # noqa: E402
+from adapters.git.SubprocessGitManager import SubprocessGitManager  # noqa: E402
+from adapters.testing.SubprocessPytestManager import (
+    SubprocessPytestManager,  # noqa: E402
+)
+from agent.graph import app  # noqa: E402
+from constants import Status  # noqa: E402
+from utils.model_factory import get_model  # noqa: E402
 
 
 def run_task(task: dict) -> dict:
     repo_path = Path(task["repo_path"]).resolve()
     target = task["bug"]
 
-    model = ChatOllama(
-        model=os.environ.get("BUGSOLVER_MODEL", "qwen2.5-coder:7b"),
-        base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
-    )
+    model = get_model()
     config = {
         "configurable": {
             "model": model,
@@ -108,7 +106,7 @@ def write_scorecard(results: list, out_dir: Path) -> None:
     lines = [
         "# bug-solver benchmark scorecard",
         "",
-        f"_Generated {datetime.now(timezone.utc).isoformat()} · "
+        f"_Generated {datetime.now(UTC).isoformat()} · "
         f"model `{os.environ.get('BUGSOLVER_MODEL', 'qwen2.5-coder:7b')}`_",
         "",
         f"**Fix rate: {successes}/{total} ({100.0 * successes / total if total else 0:.0f}%)**",

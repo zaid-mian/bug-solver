@@ -8,16 +8,13 @@ Translates adapter responses/outcomes into Markdown response templates.
 # -----------------------------------------
 #  Necessary Standard & LangChain Imports
 # -----------------------------------------
-import os
-from pathlib import Path
-from typing import List, Callable, Dict
-from langchain_core.tools import tool, BaseTool
+from langchain_core.tools import BaseTool, tool
 
 # -----------------------------------------
 #  Abstract Interface & Result Types
 # -----------------------------------------
 from adapters.platform.base import BaseGitHubClient
-from adapters.platform.types import GitHubClientResult, GitHubOpStatus
+from adapters.platform.types import GitHubClientResult
 
 # -----------------------------------------
 #  Helper / Prompt Engineering Utility
@@ -28,7 +25,7 @@ from utils.template_loader import load_response_tempate
 # -----------------------------------------
 #  Factory Function (Dependency Injection)
 # -----------------------------------------
-def github_tools(github_adapter: BaseGitHubClient) -> List[BaseTool]:
+def github_tools(github_adapter: BaseGitHubClient) -> list[BaseTool]:
     """
     Factory that binds an adapter implementation to LangChain @tools decorators.
     Using parse_docstring to give more argument context to the LLM.
@@ -53,16 +50,17 @@ def github_tools(github_adapter: BaseGitHubClient) -> List[BaseTool]:
 
         # Then load the markdown response template
         template: str = load_response_tempate(
-            skill="planner", tool_name="get_issues", section=result.status.value
+            skill="planner", tool_name="get_issue", section=result.status.value
         )
 
+        issue_dict = result.issue_dict or {}
         # Format template placeholders with tool inputs and adapter results
         return template.format(
             issue_number=issue_number,
-            issue_title=result.issue_dict["Issue Title"],
-            issue_description=result.issue_dict["Issue Description"],
-            issue_state=result.issue_dict["State"],
-            issue_dict=result.issue_dict,
+            issue_title=issue_dict.get("Issue Title", ""),
+            issue_description=issue_dict.get("Issue Description", ""),
+            issue_state=issue_dict.get("State", ""),
+            issue_dict=issue_dict,
             comments=result.comments,
             raw_data=result.raw_data,
             error_details=result.error_details,

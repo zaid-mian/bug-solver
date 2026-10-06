@@ -5,11 +5,10 @@ Bridge layer exposing test operations to the LLM.
 Translates adapter responses/outcomes into plain-text tool results.
 """
 
-from typing import List
-from langchain_core.tools import tool, BaseTool
+
+from langchain_core.tools import BaseTool, tool
 
 from adapters.testing.base import BaseTestRunner
-from adapters.testing.types import TestOpStatus
 
 
 def _format(result) -> str:
@@ -30,14 +29,14 @@ def _format(result) -> str:
     return "\n".join(lines)
 
 
-def testing_tools(test_adapter: BaseTestRunner) -> List[BaseTool]:
+def testing_tools(test_adapter: BaseTestRunner) -> list[BaseTool]:
     """
     Factory that binds a test-runner adapter to LangChain @tool decorators.
     Returns a list of tools to be bound to the Test Runner node.
     """
 
     @tool(parse_docstring=True)
-    def run_tests(paths: List[str] = None, keyword: str = "") -> str:
+    def run_tests(paths: list[str] = None, keyword: str = "") -> str:
         """
         Run pytest over the given test paths and return the full results.
 
@@ -52,7 +51,7 @@ def testing_tools(test_adapter: BaseTestRunner) -> List[BaseTool]:
         return _format(result)
 
     @tool(parse_docstring=True)
-    def collect_tests(paths: List[str] = None) -> str:
+    def collect_tests(paths: list[str] = None) -> str:
         """
         Collect (do not run) tests and return the collection report.
         Use this to discover what tests exist before running them.

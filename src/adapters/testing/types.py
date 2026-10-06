@@ -3,13 +3,14 @@
 # ---------------------------------
 
 import os
-from enum import Enum
 from dataclasses import dataclass
-from typing import Any, Optional, Dict
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
 
 class TestOpStatus(Enum):
+    __test__ = False
     # ---------------------
     #  For run_tests
     # ---------------------
@@ -50,6 +51,6 @@ class TestOpStatus(Enum):
 class TestResult:
     status: TestOpStatus
     raw_data: Any = None
-    passed: Optional[list[str | os.PathLike | Path]] = None
-    failed: Optional[list[str | os.PathLike | Path]] = None
-    error_details: Optional[str] = None
+    passed: list[str | os.PathLike | Path] | None = None
+    failed: list[str | os.PathLike | Path] | None = None
+    error_details: str | None = None

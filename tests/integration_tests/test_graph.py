@@ -28,7 +28,7 @@ def test_full_retry_lifecycle_routing() -> None:
     # A failed attempt goes back to the Coder...
     assert check_status({"status": Status.FAILED, "retry_count": 3}) == 1
     # ...until retries run out, at which point the Planner re-plans.
-    assert check_status({"status": Status.FAILED, "retry_count": 11}) == 1
+    assert check_status({"status": Status.FAILED, "retry_count": 11}) == 2
     assert check_status({"status": Status.IN_PROGRESS, "retry_count": 11}) == 2
     # Success always ships.
     assert check_status({"status": Status.SUCCESS, "retry_count": 11}) == 0

@@ -3,10 +3,9 @@
 #   Local filesystem operations
 # ------------------------------------
 
-from abc import ABC, abstractmethod
 import os
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict
 
 from .types import FileSystemResult
 
@@ -22,7 +21,7 @@ class BaseFileSystemTools(ABC):
     @abstractmethod
     def write_files(
         self,
-        file_paths_and_edits: Dict[str | os.PathLike | Path, str],
+        file_paths_and_edits: dict[str | os.PathLike | Path, str],
     ) -> FileSystemResult:
         """Writes file to local filesystem"""
         pass

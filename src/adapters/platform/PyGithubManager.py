@@ -3,53 +3,49 @@
 #  BaseGitHubClient Abstract Class
 # -------------------------------------
 
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 
 from .base import BaseGitHubClient
 from .types import GitHubClientResult, GitHubOpStatus
 
 
 class PyGithubManager(BaseGitHubClient):
-    def __init__(self, token, repo_name):
+    def __init__(self, token: str, repo_name: str):
         self.token = token
         self.repo_name = repo_name
+        self.status = GitHubOpStatus.INIT_GITHUB_CLIENT
+        self.error_details = None
+        self.raw_data = None
+        self.repo = None
 
-        # instantiate the Github with token
-        self.github = Github(self.token)
-
-        # get the reposistory with rull repo name (owner/repo)
         try:
+            auth = Auth.Token(self.token) if self.token else None
+            self.github = Github(auth=auth) if auth else Github()
             self.repo = self.github.get_repo(self.repo_name)
+            self.raw_data = f"Initialized GitHub Client for {self.repo_name}"
         except GithubException as e:
-            # handle specific HTTP error status codes
+            self.raw_data = e
             if e.status == 404:
-                return GitHubClientResult(
-                    status=GitHubOpStatus.REPO_NOT_FOUND,
-                    raw_data=e,
-                    error_details=f"Error: Repository {self.repo_name} not found.",
-                )
-
+                self.status = GitHubOpStatus.REPO_NOT_FOUND
+                self.error_details = f"Error: Repository {self.repo_name} not found."
             elif e.status == 401:
-                return GitHubClientResult(
-                    status=GitHubOpStatus.BAD_CREDENTIALS,
-                    raw_data=e,
-                    error_details=f"Error: Bad credentials or invalid token {self.token}.",
-                )
-
+                self.status = GitHubOpStatus.BAD_CREDENTIALS
+                self.error_details = "Error: Bad credentials or invalid token."
             else:
-                return GitHubClientResult(
-                    status=GitHubOpStatus.API_ERROR,
-                    raw_data=e,
-                    error_details=f"GitHub API Error [{e.status}: {e.message}]",
-                )
-
-        return GitHubClientResult(
-            status=GitHubOpStatus.INIT_GITHUB_CLIENT,
-            raw_data=f"Initilized a GitHub Client with creds {self.token} on repo {self.repo_name}",
-        )
+                self.status = GitHubOpStatus.API_ERROR
+                self.error_details = f"GitHub API Error [{e.status}]"
+        except Exception as e:
+            self.status = GitHubOpStatus.GENERAL_EXCEPTION
+            self.error_details = f"An unexpected error occurred: {e}"
 
     def get_issue(self, issue_number: int) -> GitHubClientResult:
         """Fetches issue title, description, and comments."""
+
+        if self.repo is None:
+            return GitHubClientResult(
+                status=self.status,
+                error_details=self.error_details or "GitHub client not initialized",
+            )
 
         try:
             issue = self.repo.get_issue(number=issue_number)
@@ -70,7 +66,7 @@ class PyGithubManager(BaseGitHubClient):
                 return GitHubClientResult(
                     status=GitHubOpStatus.API_ERROR,
                     raw_data=e,
-                    error_details=f"GitHub API Error [{e.status}: {e.message}]",
+                    error_details=f"GitHub API Error [{e.status}: {getattr(e, 'data', str(e))}]",
                 )
 
         except Exception as e:

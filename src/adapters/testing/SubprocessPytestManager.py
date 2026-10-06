@@ -13,10 +13,9 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 from .base import BaseTestRunner
-from .types import TestResult, TestOpStatus
+from .types import TestOpStatus, TestResult
 
 # Invoke pytest via the current interpreter so the adapter works inside
 # virtualenvs and containers regardless of PATH.
@@ -31,7 +30,7 @@ _SHELL_METACHARS = set(";&|$`<>(){}!\\")
 _BLOCKED_FLAGS = {"--pdb", "--pdbcls", "--trace"}
 
 
-def sanitize_pytest_args(args_str: str) -> Tuple[bool, List[str], str]:
+def sanitize_pytest_args(args_str: str) -> tuple[bool, list[str], str]:
     """Validate an argument string for `pytest <args>`.
 
     Returns (is_safe, tokens, error_reason). Safe means: tokenizes cleanly,
@@ -69,7 +68,7 @@ class SubprocessPytestManager(BaseTestRunner):
         # the agent can never accidentally run tests against its own code.
         self.repo_path = Path(repo_path) if repo_path else None
 
-    def _run(self, cmd: List[str], timeout: float) -> subprocess.CompletedProcess:
+    def _run(self, cmd: list[str], timeout: float) -> subprocess.CompletedProcess:
         return subprocess.run(
             cmd,
             capture_output=True,

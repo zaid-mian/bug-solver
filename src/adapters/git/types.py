@@ -2,9 +2,9 @@
 #  Adapter Type: Local Git Operations
 # -------------------------------------
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import Any, Optional
+from enum import Enum
+from typing import Any
 
 
 class GitOpStatus(Enum):
@@ -99,7 +99,7 @@ class GitOpStatus(Enum):
 class GitResult:
     status: GitOpStatus
     raw_data: Any = None
-    error_details: Optional[str] = None
-    ignored_files: Optional[list] = None
-    unmatched_files: Optional[list] = None
-    committed_files: Optional[list] = None
+    error_details: str | None = None
+    ignored_files: list | None = None
+    unmatched_files: list | None = None
+    committed_files: list | None = None

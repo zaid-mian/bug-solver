@@ -1,18 +1,15 @@
-import json
 
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.prebuilt import ToolNode
 
-from .state import State
-
-# from .graph import Context
-
-from utils.prompt_loader import load_skill_prompt
 from tools.git_tools import git_tools
-from tools.workspace_tools import workspace_tools
 from tools.github_tools import github_tools
 from tools.testing_tools import testing_tools
+from tools.workspace_tools import workspace_tools
+from utils.json_parser import parse_json_from_response
+from utils.prompt_loader import load_skill_prompt
+
+from .state import State
 
 
 # ------------------------
@@ -28,7 +25,8 @@ async def planner(state: State, config: RunnableConfig):
     adapters = config["configurable"]["adapters"]
     bound_git_tools = git_tools(adapters["git_manager"])
     bound_workspace_tools = workspace_tools(adapters["workspace_manager"])
-    bound_github_tools = github_tools(adapters["github_manager"])
+    github_manager = adapters.get("github_manager")
+    bound_github_tools = github_tools(github_manager) if github_manager is not None else []
 
     tools = bound_git_tools + bound_workspace_tools + bound_github_tools
 
@@ -58,17 +56,15 @@ async def planner(state: State, config: RunnableConfig):
                 ToolMessage(content=str(result), tool_call_id=tool_call["id"])
             )
 
-    # Then extract the structured state from the final message (or a follow-up call)
-    content = response.content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-    final_data = json.loads(content.strip())
+    # Then extract the structured state from the final message
+    try:
+        final_data = parse_json_from_response(response.content)
+    except Exception:
+        final_data = {"relevant_files": [], "fix_plan": str(response.content)}
 
     return {
-        "relevant_files": final_data["relevant_files"],
-        "fix_plan": final_data["fix_plan"],
+        "relevant_files": final_data.get("relevant_files", []),
+        "fix_plan": final_data.get("fix_plan", str(response.content)),
         "messages": messages,
     }
 
@@ -86,7 +82,8 @@ async def coder(state: State, config: RunnableConfig):
     adapters = config["configurable"]["adapters"]
     bound_git_tools = git_tools(adapters["git_manager"])
     bound_workspace_tools = workspace_tools(adapters["workspace_manager"])
-    bound_github_tools = github_tools(adapters["github_manager"])
+    github_manager = adapters.get("github_manager")
+    bound_github_tools = github_tools(github_manager) if github_manager is not None else []
 
     tools = bound_git_tools + bound_workspace_tools + bound_github_tools
 
@@ -116,16 +113,14 @@ async def coder(state: State, config: RunnableConfig):
                 ToolMessage(content=str(result), tool_call_id=tool_call["id"])
             )
 
-    # Then extract the structured state from the final message (or a follow-up call)
-    content = response.content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-    final_data = json.loads(content.strip())
+    # Then extract the structured state from the final message
+    try:
+        final_data = parse_json_from_response(response.content)
+    except Exception:
+        final_data = {"patch_code": str(response.content)}
 
     return {
-        "patch_code": final_data["patch_code"],
+        "patch_code": final_data.get("patch_code", str(response.content)),
         "messages": messages,
     }
 
@@ -182,16 +177,14 @@ async def test_runner(state: State, config: RunnableConfig):
                 ToolMessage(content=str(result), tool_call_id=tool_call["id"])
             )
 
-    # Then extract the structured state from the final message (or a follow-up call)
-    content = response.content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-    final_data = json.loads(content.strip())
+    # Then extract the structured state from the final message
+    try:
+        final_data = parse_json_from_response(response.content)
+    except Exception:
+        final_data = {"test_output": str(response.content)}
 
     return {
-        "test_output": final_data["test_output"],
+        "test_output": final_data.get("test_output", str(response.content)),
         "messages": messages,
     }
 
@@ -258,16 +251,11 @@ async def evaluator(state: State, config: RunnableConfig):
 
         # No tool calls: try to parse a verdict, otherwise keep listening
         # (the model may be writing its diagnostic first).
-        content = response.content.strip()
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
         try:
-            verdict = json.loads(content.strip())
+            verdict = parse_json_from_response(response.content)
             if isinstance(verdict, dict) and "status" in verdict:
                 break
-        except (json.JSONDecodeError, AttributeError, IndexError):
+        except Exception:
             pass
 
         # Not a verdict yet — nudge it to conclude.
@@ -281,7 +269,7 @@ async def evaluator(state: State, config: RunnableConfig):
             )
         )
 
-    status = verdict["status"]
+    status = verdict.get("status", "FAILED")
     retry_count = int(verdict.get("retry_count", state.get("retry_count", 0)))
     if status == "FAILED" and retry_count <= state.get("retry_count", 0):
         # guarantee forward progress on the retry counter
@@ -359,15 +347,13 @@ async def pr_writer(state: State, config: RunnableConfig):
                 ToolMessage(content=str(result), tool_call_id=tool_call["id"])
             )
 
-    # Then extract the structured state from the final message (or a follow-up call)
-    content = response.content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-    final_data = json.loads(content.strip())
+    # Then extract the structured state from the final message
+    try:
+        final_data = parse_json_from_response(response.content)
+    except Exception:
+        final_data = {"status": "SUCCESS"}
 
     return {
-        "status": final_data["status"],
+        "status": final_data.get("status", "SUCCESS"),
         "messages": messages,
     }

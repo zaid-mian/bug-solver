@@ -5,55 +5,42 @@
 
 import os
 from pathlib import Path
-from typing import Dict
 
 from .base import BaseFileSystemTools
-from .types import FileSystemResult, FileOpStatus
+from .types import FileOpStatus, FileSystemResult
 
 
 class PATHLIBPythonManager(BaseFileSystemTools):
     def __init__(self, root: Path):
-        self.root = root
+        self.root = Path(root).resolve()
+
+    def _resolve(self, path: str | os.PathLike | Path) -> Path:
+        p = Path(path)
+        return p if p.is_absolute() else (self.root / p).resolve()
 
     def read_files(
         self, file_paths: list[str | os.PathLike | Path]
     ) -> FileSystemResult:
         """Reads file from local filesystem"""
-
         read_file_content = {}
         unreadable_files = {}
 
-        # iterate through the files and read_text
         for file in file_paths:
-            # convert to Path if not already
-            file = Path(file)
-
+            resolved = self._resolve(file)
             try:
-                content = file.read_text(encoding="utf-8")
-
-                # then add content to dict
-                read_file_content[file] = content
-
+                content = resolved.read_text(encoding="utf-8")
+                read_file_content[Path(file)] = content
             except FileNotFoundError:
-                unreadable_files[file] = f"Error: The file at {file} does not exist."
-
+                unreadable_files[Path(file)] = f"Error: The file at {file} does not exist."
             except IsADirectoryError:
-                unreadable_files[file] = f"Error: {file} is a directory, not a file."
-
+                unreadable_files[Path(file)] = f"Error: {file} is a directory, not a file."
             except PermissionError:
-                unreadable_files[file] = f"Error: Missing read permissions for {file}."
-
+                unreadable_files[Path(file)] = f"Error: Missing read permissions for {file}."
             except UnicodeDecodeError as e:
-                unreadable_files[file] = (
-                    f"Error: Failed to decode file using UTF-8. Details: {e}"
-                )
-
+                unreadable_files[Path(file)] = f"Error: Failed to decode file using UTF-8. Details: {e}"
             except OSError as e:
-                unreadable_files[file] = (
-                    f"System Error: A broader operating system error occurred: {e}"
-                )
+                unreadable_files[Path(file)] = f"System Error: A broader operating system error occurred: {e}"
 
-        # then return the successfully read files and their content, and the unsuccessfully read files
         return FileSystemResult(
             status=FileOpStatus.SUCCESSFULLY_READ_SOME_FILES,
             read_file_contents=read_file_content,
@@ -62,41 +49,25 @@ class PATHLIBPythonManager(BaseFileSystemTools):
 
     def write_files(
         self,
-        file_paths_and_edits: list[str | os.PathLike | Path, str],
+        file_paths_and_edits: dict[str | os.PathLike | Path, str],
     ) -> FileSystemResult:
         """Writes file to local filesystem"""
-
         written_files = []
         unwritten_files = {}
 
-        # iterate through the files and write_text
-        # this assumes that the content that is being added/modified still gives the entirety of the file contents with the modifications within it.
-        for file in file_paths_and_edits:
-            # convert to Path if not already, and convert in content_edits too
-            original_path = file
-            file = Path(file)
-
-            # ensure the parent directory exists first
-            file.parent.mkdir(parents=True, exist_ok=True)
-
-            # then write to file using write_text
+        for file, content in file_paths_and_edits.items():
+            resolved = self._resolve(file)
             try:
-                file.write_text(file_paths_and_edits[original_path], encoding="utf-8")
-
+                resolved.parent.mkdir(parents=True, exist_ok=True)
+                resolved.write_text(content, encoding="utf-8")
+                written_files.append(Path(file))
             except FileNotFoundError:
-                unwritten_files[file] = (
-                    f"Error: The directory structure for {file} does not exist."
-                )
-
+                unwritten_files[Path(file)] = f"Error: The directory structure for {file} does not exist."
             except PermissionError:
-                unwritten_files[file] = (
-                    f"Error: Do not have permission to write to {file}."
-                )
-
+                unwritten_files[Path(file)] = f"Error: Do not have permission to write to {file}."
             except OSError as e:
-                unwritten_files[file] = f"System error writing to {file}: {e}"
+                unwritten_files[Path(file)] = f"System error writing to {file}: {e}"
 
-        # then return the successfully written files and unwritten/Error files
         return FileSystemResult(
             status=FileOpStatus.SUCCESSFULLY_WROTE_SOME_FILES,
             written_files=written_files,
@@ -104,22 +75,24 @@ class PATHLIBPythonManager(BaseFileSystemTools):
         )
 
     def find_files(self, text_pattern: str) -> FileSystemResult:
-        """Finds files by glop text patterns"""
+        """Finds files matching a glob pattern or containing text."""
         matches = []
         unreadable = []
 
-        # first get files, so call list_dir from the root
-        recursive_result: FileSystemResult = self.list_dir()
-        files = recursive_result.files
+        recursive_result: FileSystemResult = self.list_dir(recursive_search=True)
+        files = recursive_result.files or []
 
-        match_count = 0
         for file in files:
+            # Check pattern match against file name or path
+            if file.match(text_pattern) or text_pattern in file.name:
+                matches.append(file)
+                continue
+
+            # Also check content if text_pattern is inside file
             try:
                 if text_pattern in file.read_text(encoding="utf-8"):
                     matches.append(file)
-                    match_count += 1
             except Exception:
-                # skip files that cannot be read
                 unreadable.append(file)
 
         if not matches:
@@ -135,56 +108,31 @@ class PATHLIBPythonManager(BaseFileSystemTools):
             files=files,
             matched_files=matches,
             unreadable_files=unreadable,
-            raw_data=f"Matches that were found: '{match_count}'.",
+            raw_data=f"Matches that were found: '{len(matches)}'.",
         )
 
     def list_dir(
         self, dir: str | os.PathLike | Path = None, recursive_search: bool = True
     ) -> FileSystemResult:
-        """Gives a list of the directory/repoistory files/structure."""
+        """Gives a list of the directory/repository files/structure."""
+        target_dir = self._resolve(dir) if dir else self.root
 
-        # the given directory, if it was given, may not be the root directory which is set at init
-        # so check for the dir variable if it is given, if so use that.
-        if dir:
-            dir = Path(dir)
-        else:
-            dir = self.root
-
-        # check if the dir actually exists
-        if not dir.exists():
+        if not target_dir.exists():
             return FileSystemResult(
                 status=FileOpStatus.DIR_NON_EXISTENT,
-                error_details=f"Error: the path of directory '{dir}' does not exist.",
+                error_details=f"Error: the path of directory '{target_dir}' does not exist.",
             )
 
-        # check if the given path for dir is actually a directory
-        if not dir.is_dir():
+        if not target_dir.is_dir():
             return FileSystemResult(
                 status=FileOpStatus.NOT_DIR,
-                error_details=f"Error: the path of 'directory' given '{dir}' is not actually a directory.",
+                error_details=f"Error: the path of 'directory' given '{target_dir}' is not actually a directory.",
             )
 
-        # begin exploring from the directory path (root or not/given)
-        dir.resolve()
-
-        # track discovery counts
-        file_count = 0
-        dir_count = 0
-
-        # check if we are doing a recursive search in the directory into its subdirectories or only surface level
         if not recursive_search:
-            # list of everything in the directory dir
-            all_entries = list(dir.iterdir())
-
-            # then get the files and subdirectories specifically and their count
-            files = [item for item in dir.iterdir() if item.is_file()]
-            dirs = [item for item in dir.iterdir() if item.is_dir()]
-
-            file_count = len(files)
-            dir_count = len(dirs)
-
-            # then return them
-            raw_data = f"Retreived {file_count} of files and {dir_count} of subdirectories within the directory {dir}."
+            files = [item for item in target_dir.iterdir() if item.is_file()]
+            dirs = [item for item in target_dir.iterdir() if item.is_dir()]
+            raw_data = f"Retrieved {len(files)} files and {len(dirs)} subdirectories within {target_dir}."
             return FileSystemResult(
                 status=FileOpStatus.SEARCHED_SHALLOW_SUCCESS,
                 files=files,
@@ -192,34 +140,29 @@ class PATHLIBPythonManager(BaseFileSystemTools):
                 raw_data=raw_data,
             )
 
-        # Otherwise do a deep dive recursive search
-        visual_repo_structure = ""
+        visual_entries = []
         path_repo_structure = []
         files = []
         dirs = []
-        for path in sorted(dir.rglob("*")):
-            # Calculate visual indentation depth based on structure
-            depth = len(path.relative_to(dir).parts) - 1
-            indent = " " * depth
+        for path in sorted(target_dir.rglob("*")):
+            depth = len(path.relative_to(target_dir).parts) - 1
+            indent = "  " * depth
 
             if path.is_dir():
-                dir_count += 1
-
-                visual_repo_structure.append(f"{indent}📁 {path.name}/\n")
-                path_repo_structure.append(path)
+                visual_entries.append(f"{indent}📁 {path.name}/\n")
                 dirs.append(path)
             elif path.is_file():
-                file_count += 1
-
-                visual_repo_structure.append(f"{indent}📄 {path.name} ({path.suffix})")
-                path_repo_structure.append(path)
+                visual_entries.append(f"{indent}📄 {path.name} ({path.suffix})\n")
                 files.append(path)
+            path_repo_structure.append(path)
 
-        raw_data = f"Retreived {file_count} of files and {dir_count} of subdirectories within the entirety of the directory {dir} and its subdirectories."
+        visual_repo_structure = "".join(visual_entries)
+        raw_data = f"Retrieved {len(files)} files and {len(dirs)} subdirectories within {target_dir}."
 
-        # then return the final result of recursive search
         return FileSystemResult(
             status=FileOpStatus.SEARCHED_RECURSIVELY_SUCCESS,
+            files=files,
+            dirs=dirs,
             visual_repo_structure=visual_repo_structure,
             path_repo_structure=path_repo_structure,
             raw_data=raw_data,

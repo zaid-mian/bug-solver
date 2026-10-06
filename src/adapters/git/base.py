@@ -4,6 +4,7 @@
 # ------------------------------------
 
 from abc import ABC, abstractmethod
+
 from .types import GitResult
 
 

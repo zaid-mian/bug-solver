@@ -7,15 +7,15 @@ from __future__ import annotations
 
 from typing import Literal
 
-from langgraph.graph import StateGraph, START, END
-
-from .nodes import planner, coder, test_runner, evaluator, pr_writer
-from .state import State
+from langgraph.graph import END, START, StateGraph
 
 # -------------------
 #  Import Constants
 # -------------------
 from constants import MAX_RETRIES, Status
+
+from .nodes import coder, evaluator, planner, pr_writer, test_runner
+from .state import State
 
 '''
 # -------------------
@@ -54,13 +54,9 @@ def check_status(state: State) -> Literal[0, 1, 2]:
     0 -> PR Writer (fix verified), 1 -> Coder (try again),
     2 -> Planner (retries exhausted, re-plan from scratch).
     """
-    if state["status"] == Status.FAILED:
-        return 1
     if state["status"] == Status.SUCCESS:
         return 0
-    # IN_PROGRESS or unexpected: only re-plan when retries are exhausted,
-    # otherwise give the Coder another attempt.
-    if state["retry_count"] > MAX_RETRIES:
+    if state.get("retry_count", 0) > MAX_RETRIES:
         return 2
     return 1
 

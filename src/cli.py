@@ -1,20 +1,20 @@
 import os
 import time
-import typer
-from typing import Annotated, Optional
 from pathlib import Path
-from git import Repo, InvalidGitRepositoryError
+from typing import Annotated
 
-from constants import Status
-from agent.graph import app
-from adapters.git.SubprocessGitManager import SubprocessGitManager
+import typer
+from git import InvalidGitRepositoryError, Repo
+
+from adapters.filesystem.base import BaseFileSystemTools
 from adapters.filesystem.PATHLIBPythonManager import PATHLIBPythonManager
+from adapters.git.base import BaseGitRepo
+from adapters.git.SubprocessGitManager import SubprocessGitManager
 from adapters.platform.PyGithubManager import PyGithubManager
+from adapters.platform.types import GitHubOpStatus
 from adapters.testing.SubprocessPytestManager import SubprocessPytestManager
-
-from adapters.git.types import GitResult, GitOpStatus
-from adapters.filesystem.types import FileSystemResult, FileOpStatus
-from adapters.platform.types import GitHubClientResult, GitHubOpStatus
+from agent.graph import app
+from constants import Status
 
 # ----------------------
 #  Example Commands
@@ -68,7 +68,7 @@ def run(
         str, typer.Argument(help="Issue number or local bug description.")
     ],
     repo_name: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--name",
             "-n",
@@ -76,7 +76,7 @@ def run(
         ),
     ] = None,
     repo_path: Annotated[
-        Optional[Path], typer.Option("--path", "-p", help="Path to local repository.")
+        Path | None, typer.Option("--path", "-p", help="Path to local repository.")
     ] = None,  # standard default
     new_branch: Annotated[
         bool,
@@ -94,28 +94,39 @@ def run(
     local_only: Annotated[
         bool, typer.Option("--local-only", help="Keep changes local without pushing.")
     ] = False,
+    provider: Annotated[
+        str | None,
+        typer.Option(
+            "--provider",
+            help="LLM provider: ollama (default), anthropic, openai, groq, openrouter.",
+        ),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option(
+            "--model",
+            "-m",
+            help="Model name (e.g. qwen2.5-coder:7b, claude-3-5-sonnet-latest, gpt-4o).",
+        ),
+    ] = None,
 ):
     """Run the Bug Solver Agent on a local repository or remote GitHub issue."""
 
     # 1: resolve target type
     if target.isdigit():
-        resolved_issue_id: Optional[int] = int(target)
-
-        # this is not necessarily true, since there is one in GitHub, but it will probably be read else where
-        bug_description: Optional[str] = None
-        is_remote_issue = True
+        resolved_issue_id: int | None = int(target)
+        bug_description: str | None = None
     else:
-        resolved_issue_id: Optional[int] = None
-        bug_description: Optional[str] = target
-        is_remote_issue = False
+        resolved_issue_id: int | None = None
+        bug_description: str | None = target
 
     # 2: resolve repository path
     target_repo_path = repo_path or get_repo_root()
 
     # 3: Git, Workspace/Filesystem, and GitHub Manager
-    git_manager: GitResult = SubprocessGitManager(repo_path=target_repo_path)
+    git_manager: BaseGitRepo = SubprocessGitManager(repo_path=target_repo_path)
 
-    workspace_manager: FileSystemResult = PATHLIBPythonManager(root=target_repo_path)
+    workspace_manager: BaseFileSystemTools = PATHLIBPythonManager(root=target_repo_path)
 
     github_token = os.environ.get("GITHUB_TOKEN")
     github_manager = (
@@ -148,21 +159,15 @@ def run(
         branch_result = git_manager.checkout_branch(branch_name, create_new=True)
         typer.echo(f"Created fix branch: {branch_name} ({branch_result.status})")
 
-    # 3d: the LLM. Defaults to a local Ollama model — no API keys needed.
-    # Override with BUGSOLVER_MODEL / OLLAMA_HOST env vars.
-    # Imported lazily so `bugsolver --help` works even where the
-    # ollama client package cannot initialize (e.g. proxied envs).
-    from langchain_ollama import ChatOllama
+    # 3d: the LLM: defaults to local Ollama, or uses Anthropic / OpenAI / Groq / OpenRouter
+    from utils.model_factory import get_model
 
-    model = ChatOllama(
-        model=os.environ.get("BUGSOLVER_MODEL", "qwen2.5-coder:7b"),
-        base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
-    )
+    llm = get_model(provider=provider, model_name=model)
 
     # 4: Construct RunnableConfig (Execution Environment)
     config = {
         "configurable": {
-            "model": model,
+            "model": llm,
             "adapters": {
                 "git_manager": git_manager,
                 "workspace_manager": workspace_manager,

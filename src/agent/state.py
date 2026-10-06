@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Annotated, List, Optional
-from typing_extensions import TypedDict
+from typing import Annotated
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
+from typing_extensions import TypedDict
 
 from constants import Status
 
@@ -22,7 +22,7 @@ class State(TypedDict):
     """Input state for the agent."""
 
     # The issue id, if there is one
-    issue_id: Optional[int]
+    issue_id: int | None
 
     # The bug report, issue description, or error stack trace
     issue_description: str
@@ -33,16 +33,16 @@ class State(TypedDict):
     repo_path: str | os.PathLike | Path
 
     # Paths and code snippets from repo
-    relevant_files: List[str]
+    relevant_files: list[str]
 
     # The plan
-    fix_plan: Optional[str]
+    fix_plan: str | None
 
     # Generated code fix/diff
-    patch_code: Optional[str]
+    patch_code: str | None
 
     # Log/errors from running tests
-    test_output: Optional[str]
+    test_output: str | None
 
     # Integer tracking iteration cycles, to prevent infinite loops
     retry_count: int

@@ -10,14 +10,14 @@ Translates adapter responses/outcomes into Markdown response templates.
 # -----------------------------------------
 import os
 from pathlib import Path
-from typing import List, Callable, Dict
-from langchain_core.tools import tool, BaseTool
+
+from langchain_core.tools import BaseTool, tool
 
 # -----------------------------------------
 #  Abstract Interface & Result Types
 # -----------------------------------------
 from adapters.filesystem.base import BaseFileSystemTools
-from adapters.filesystem.types import FileSystemResult, FileOpStatus
+from adapters.filesystem.types import FileSystemResult
 
 # -----------------------------------------
 #  Helper / Prompt Engineering Utility
@@ -28,7 +28,7 @@ from utils.template_loader import load_response_tempate
 # -----------------------------------------
 #  Factory Function (Dependency Injection)
 # -----------------------------------------
-def workspace_tools(filesystem_adapter: BaseFileSystemTools) -> List[BaseTool]:
+def workspace_tools(filesystem_adapter: BaseFileSystemTools) -> list[BaseTool]:
     """
     Factory that binds an adapter implementation to LangChain @tools decorators.
     Using parse_docstring to give more argument context to the LLM.
@@ -66,7 +66,7 @@ def workspace_tools(filesystem_adapter: BaseFileSystemTools) -> List[BaseTool]:
     # ----------------------------------------
     @tool(parse_docstring=True)
     def write_files(
-        file_paths_and_edits: Dict[str | os.PathLike | Path, str],
+        file_paths_and_edits: dict[str | os.PathLike | Path, str],
     ) -> str:
         """
         Writes to files in the repository, from a list of path that the LLM decides it needs to write to for content edits.

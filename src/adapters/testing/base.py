@@ -3,11 +3,11 @@
 #   Test operations
 # --------------------------------------
 
-from abc import ABC, abstractmethod
 import os
+from abc import ABC, abstractmethod
 from pathlib import Path
 
-from .types import TestResult, TestOpStatus
+from .types import TestResult
 
 
 class BaseTestRunner(ABC):

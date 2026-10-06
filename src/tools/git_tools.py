@@ -8,14 +8,13 @@ Translates adapter responses/outcomes into Markdown response templates.
 # -----------------------------------------
 #  Necessary Standard & LangChain Imports
 # -----------------------------------------
-from typing import List, Callable
-from langchain_core.tools import tool, BaseTool
+from langchain_core.tools import BaseTool, tool
 
 # -----------------------------------------
 #  Abstract Interface & Result Types
 # -----------------------------------------
 from adapters.git.base import BaseGitRepo
-from adapters.git.types import GitResult, GitOpStatus
+from adapters.git.types import GitResult
 
 # -----------------------------------------
 #  Helper / Prompt Engineering Utility
@@ -26,7 +25,7 @@ from utils.template_loader import load_response_tempate
 # -----------------------------------------
 #  Factory Function (Dependency Injection)
 # -----------------------------------------
-def git_tools(git_adapter: BaseGitRepo) -> List[BaseTool]:
+def git_tools(git_adapter: BaseGitRepo) -> list[BaseTool]:
     """
     Factory that binds an adapter implementation to LangChain @tools decorators.
     Using parse_docstring to give more argument context to the LLM.

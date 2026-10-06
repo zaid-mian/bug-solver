@@ -5,10 +5,9 @@
 
 import os
 from pathlib import Path
-from typing import Dict
 
 from .base import BaseFileSystemTools
-from .types import FileSystemResult, FileOpStatus
+from .types import FileSystemResult
 
 
 class OSPythonManager(BaseFileSystemTools):
@@ -19,7 +18,7 @@ class OSPythonManager(BaseFileSystemTools):
         pass
 
     def write_files(
-        self, file_paths_and_edits: Dict[str | os.PathLike | Path, str]
+        self, file_paths_and_edits: dict[str | os.PathLike | Path, str]
     ) -> FileSystemResult:
         """Writes file to local filesystem"""
         pass

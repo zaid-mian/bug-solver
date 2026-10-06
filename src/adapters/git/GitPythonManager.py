@@ -4,7 +4,7 @@
 # -------------------------------
 
 from .base import BaseGitRepo
-from .types import GitResult, GitOpStatus
+from .types import GitResult
 
 
 class GitPythonManager(BaseGitRepo):

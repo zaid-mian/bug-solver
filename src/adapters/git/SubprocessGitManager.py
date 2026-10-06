@@ -8,21 +8,28 @@ from pathlib import Path
 
 from .base import BaseGitRepo
 from .security import sanitize_and_tokenize
-from .types import GitResult, GitOpStatus
+from .types import GitOpStatus, GitResult
 
 
 class SubprocessGitManager(BaseGitRepo):
     def __init__(self, repo_path: Path):
-        self.repo_path = repo_path
+        self.repo_path = Path(repo_path).resolve()
+
+    def _run(
+        self, cmd: list[str], check: bool = True, timeout: float = 60.0
+    ) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            cmd,
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=check,
+        )
 
     def list_local_branches(self):
         try:
-            result = subprocess.run(
-                ["git", "branch", "--format=%(refname:short)"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+            result = self._run(["git", "branch", "--format=%(refname:short)"])
             return GitResult(
                 status=GitOpStatus.LISTED_BRANCHES,
                 raw_data=[
@@ -55,11 +62,8 @@ class SubprocessGitManager(BaseGitRepo):
                 # get current branch
                 curr_branch = ""
                 try:
-                    curr_branch = subprocess.run(
+                    curr_branch = self._run(
                         ["git", "branch", "--show-current"],
-                        capture_output=True,
-                        text=True,
-                        check=True,
                     )
                 except subprocess.CalledProcessError as e:
                     return GitResult(
@@ -75,11 +79,8 @@ class SubprocessGitManager(BaseGitRepo):
                 else:
                     # else we just switch to the local branch
                     try:
-                        subprocess.run(
+                        self._run(
                             ["git", "switch", branch_name],
-                            capture_output=True,
-                            text=True,
-                            check=True,
                         )
 
                         return GitResult(
@@ -102,11 +103,8 @@ class SubprocessGitManager(BaseGitRepo):
 
                 # first check for the remote branches and their names
                 try:
-                    subprocess.run(
+                    self._run(
                         ["git", "fetch", "--all"],
-                        capture_output=True,
-                        text=True,
-                        check=True,
                     )
                 except subprocess.CalledProcessError as e:
                     return GitResult(
@@ -117,11 +115,8 @@ class SubprocessGitManager(BaseGitRepo):
 
                 # get the branches
                 try:
-                    all_branches = subprocess.run(
+                    all_branches = self._run(
                         ["git", "branch", "-a"],
-                        capture_output=True,
-                        text=True,
-                        check=True,
                     )
                 except subprocess.CalledProcessError as e:
                     return GitResult(
@@ -141,11 +136,8 @@ class SubprocessGitManager(BaseGitRepo):
                 else:
                     # then there are no branches with that name, and even though the new_branch variable was set to False we will create the new branch and switch to it
                     try:
-                        subprocess.run(
+                        self._run(
                             ["git", "switch", "-c", branch_name],
-                            capture_output=True,
-                            text=True,
-                            check=True,
                         )
                     except subprocess.CalledProcessError as e:
                         return GitResult(
@@ -167,11 +159,8 @@ class SubprocessGitManager(BaseGitRepo):
 
             # get all branches
             try:
-                subprocess.run(
+                self._run(
                     ["git", "fetch", "--all"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
                 )
             except subprocess.CalledProcessError as e:
                 return GitResult(
@@ -182,8 +171,8 @@ class SubprocessGitManager(BaseGitRepo):
 
             # get the branches
             try:
-                all_branches = subprocess.run(
-                    ["git", "branch", "-a"], capture_output=True, text=True, check=True
+                all_branches = self._run(
+                    ["git", "branch", "-a"],
                 )
             except subprocess.CalledProcessError as e:
                 return GitResult(
@@ -202,11 +191,8 @@ class SubprocessGitManager(BaseGitRepo):
             else:
                 # then just create the branch
                 try:
-                    subprocess.run(
+                    self._run(
                         ["git", "switch", "-c", branch_name],
-                        capture_output=True,
-                        text=True,
-                        check=True,
                     )
                 except subprocess.CalledProcessError as e:
                     return GitResult(
@@ -237,7 +223,7 @@ class SubprocessGitManager(BaseGitRepo):
         stage_command = ["git", "add"] + files
 
         try:
-            subprocess.run(stage_command, capture_output=True, text=True, check=True)
+            self._run(stage_command)
         except subprocess.CalledProcessError as e:
             # Check for the exit codes, to determine if the error is a git related error
             if e.returncode == 1 and ".gitignore" in e.stderr:
@@ -266,11 +252,8 @@ class SubprocessGitManager(BaseGitRepo):
                 committed_files = []
                 for file in files:
                     try:
-                        subprocess.run(
+                        self._run(
                             ["git", "add", file],
-                            capture_output=True,
-                            text=True,
-                            check=True,
                         )
 
                         committed_files.append(file)
@@ -315,11 +298,8 @@ class SubprocessGitManager(BaseGitRepo):
 
         # next commit with a message
         try:
-            commit_result = subprocess.run(
+            commit_result = self._run(
                 ["git", "commit", "-m", messages],
-                capture_output=True,
-                text=True,
-                check=True,
             )
         except subprocess.CalledProcessError as e:
             if e.returncode == 1 and "empty commit message" in e.stderr:
@@ -353,11 +333,8 @@ class SubprocessGitManager(BaseGitRepo):
         """Pushes current branch to remote."""
 
         try:
-            pushed_result = subprocess.run(
+            pushed_result = self._run(
                 ["git", "push", remote, branch_name],
-                capture_output=True,
-                text=True,
-                check=True,
             )
         except subprocess.CalledProcessError as e:
             # check for known git errors via return code and error response
@@ -376,11 +353,8 @@ class SubprocessGitManager(BaseGitRepo):
             ) and "no upstream branch" in e.stderr:
                 # then run the -u in the push command
                 try:
-                    pushed_result = subprocess.run(
+                    pushed_result = self._run(
                         ["git", "push", "-u", remote, branch_name],
-                        capture_output=True,
-                        text=True,
-                        check=True,
                     )
                 except subprocess.CalledProcessError as e:
                     return GitResult(
@@ -422,11 +396,8 @@ class SubprocessGitManager(BaseGitRepo):
         """Pulls remote branch to current branch."""
 
         try:
-            pull_result = subprocess.run(
+            pull_result = self._run(
                 ["git", "pull", remote, branch_name],
-                capture_output=True,
-                text=True,
-                check=True,
             )
         except subprocess.CalledProcessError as e:
             if (e.returncode == 1 or e.returncode == 128) and (
@@ -477,11 +448,8 @@ class SubprocessGitManager(BaseGitRepo):
         """Performs semantic keyword, symbol, or error string searches"""
 
         try:
-            grep_result = subprocess.run(
-                ["git", "grep", "-i", "-n", text_pattern, "--", "src/**/*.py", "src/**/*.md"],
-                capture_output=True,
-                text=True,
-                check=True,
+            grep_result = self._run(
+                ["git", "grep", "-i", "-n", text_pattern],
             )
         except subprocess.CalledProcessError as e:
             if e.returncode == 1 and e.stderr == "":
@@ -498,8 +466,8 @@ class SubprocessGitManager(BaseGitRepo):
     def git_status(self) -> GitResult:
         """Performs git status command to check staging and possible merging conflicts."""
         try:
-            status_result = subprocess.run(
-                ["git", "status"], capture_output=True, text=True, check=True
+            status_result = self._run(
+                ["git", "status"],
             )
         except subprocess.CalledProcessError as e:
             # check via return code

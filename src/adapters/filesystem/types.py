@@ -2,10 +2,10 @@
 #  Adapter Type: Filesystem Operations
 # -------------------------------------
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import Any, Optional, Dict
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
 
 class FileOpStatus(Enum):
@@ -43,22 +43,22 @@ class FileSystemResult:
     status: FileOpStatus
 
     # for read_files
-    read_file_contents: Optional[Dict[Path, str]] = None
-    unread_file_content: Optional[Dict[Path, str]] = None
+    read_file_contents: dict[Path, str] | None = None
+    unread_file_content: dict[Path, str] | None = None
 
     # for write_files
-    written_files: Optional[list[Path]] = None
-    unwritten_files: Optional[Dict[Path, str]] = None
+    written_files: list[Path] | None = None
+    unwritten_files: dict[Path, str] | None = None
 
     # for find_files
-    matched_files: Optional[list[Path]] = None
-    unreadable_files: Optional[list[Path]] = None  # also for read_files
+    matched_files: list[Path] | None = None
+    unreadable_files: list[Path] | None = None  # also for read_files
 
     # for list_dir
-    files: Optional[list[Path]] = None  # also for find_files
-    dirs: Optional[list[Path]] = None
-    visual_repo_structure: Optional[str] = None
-    path_repo_structure: Optional[list[Path]] = None
+    files: list[Path] | None = None  # also for find_files
+    dirs: list[Path] | None = None
+    visual_repo_structure: str | None = None
+    path_repo_structure: list[Path] | None = None
 
     raw_data: Any = None
-    error_details: Optional[str] = None
+    error_details: str | None = None

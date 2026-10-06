@@ -1,5 +1,4 @@
 import shlex
-from typing import List, Tuple
 
 # Flags and options that allow running external executables or changing git configs
 BANNED_FLAGS = {
@@ -7,7 +6,7 @@ BANNED_FLAGS = {
     "--config",  # The same override
     "--exec",  # Git rebase shell execution
     "--upload-pack",  # Specifies custom executable for fetch/push
-    "--reieve-pack",  # Specifies custom exectuable for push
+    "--receive-pack",  # Specifies custom executable for push
     "--ext-diff",  # Runs external diff executable
     "--output-indicator-new",  # Can be abused in certain git drivers
 }
@@ -21,7 +20,7 @@ BANNED_SUBCOMMANDS = {
 }
 
 
-def sanitize_and_tokenize(args_str: str) -> Tuple[bool, List[str], str]:
+def sanitize_and_tokenize(args_str: str) -> tuple[bool, list[str], str]:
     """
     Parses an un-sanitized string into CLI arguments.
     Returns: (is_safe: bool, tokens: List[str], error_reason: str)

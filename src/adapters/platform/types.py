@@ -2,9 +2,9 @@
 #  Adapter Type: GitHub Client Operations
 # ------------------------------------------
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import Any, Optional, Dict
+from enum import Enum
+from typing import Any
 
 
 class GitHubOpStatus(Enum):
@@ -51,14 +51,14 @@ class GitHubOpStatus(Enum):
 
 @dataclass
 class GitHubClientResult:
-    status = GitHubOpStatus
+    status: GitHubOpStatus
 
     # for get_issue
-    issue_dict: Optional[Dict[str, Any]] = None
-    comments: Optional[list[Any]] = None
+    issue_dict: dict[str, Any] | None = None
+    comments: list[Any] | None = None
 
     # for get_default_branch
-    default_branch: Optional[str] = None
+    default_branch: str | None = None
 
     raw_data: Any = None
-    error_details: Optional[str] = None
+    error_details: str | None = None
