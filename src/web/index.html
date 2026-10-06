@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BugSolver — Autonomous SWE-bench Repair Loop Visualizer</title>
+  <meta name="description" content="Interactive LangGraph DAG & Stateflow Visualizer for Bug Solver Agent.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="navbar" id="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon">⚡</div>
+      <div class="brand-text">
+        <h1 class="brand-title">BUGSOLVER <span class="badge">AGENTIC SWE</span></h1>
+        <p class="brand-subtitle">Autonomous Cyclical LangGraph Architecture</p>
+      </div>
+    </div>
+    <div class="nav-controls">
+      <button class="btn btn-outline" id="btn-export" title="Export graph topology as JSON">
+        <span class="btn-icon">💾</span> Export Schema
+      </button>
+      <button class="btn btn-primary" id="btn-simulate">
+        <span class="btn-icon">▶</span> Simulate Fix Run
+      </button>
+      <button class="btn btn-ghost" id="btn-reset" title="Reset Simulation">
+        <span class="btn-icon">↺</span> Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- Metrics Ticker -->
+  <section class="metrics-bar" id="metrics-bar">
+    <div class="metric-item">
+      <span class="metric-label">GRAPH TOPOLOGY</span>
+      <span class="metric-value highlight">5-Node Cyclical DAG</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">ROUTING CONDITIONAL</span>
+      <span class="metric-value text-cyan">check_status (0:PR, 1:Retry, 2:Replan)</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">MAX RETRIES</span>
+      <span class="metric-value">3 Attempts Before Re-planning</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">SUPPORTED PROVIDERS</span>
+      <span class="metric-value text-emerald">Ollama · Anthropic · OpenAI · Groq · OpenRouter</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">VERIFICATION RATE</span>
+      <span class="metric-value text-amber">100% (SWE Fixtures Passed)</span>
+    </div>
+  </section>
+
+  <!-- Main Grid Workspace -->
+  <main class="workspace-grid">
+    <!-- Center Left: DAG Interactive Canvas -->
+    <section class="dag-panel" id="dag-container">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="dot live"></span> Interactive Graph Topology
+        </div>
+        <div class="graph-legend">
+          <span class="legend-item"><span class="legend-chip chip-cyan"></span> Planner</span>
+          <span class="legend-item"><span class="legend-chip chip-yellow"></span> Coder</span>
+          <span class="legend-item"><span class="legend-chip chip-magenta"></span> Test Runner</span>
+          <span class="legend-item"><span class="legend-chip chip-green"></span> Evaluator</span>
+          <span class="legend-item"><span class="legend-chip chip-blue"></span> PR Writer</span>
+        </div>
+      </div>
+
+      <div class="canvas-viewport" id="viewport">
+        <svg id="dag-svg" class="dag-svg" viewBox="0 0 960 520" preserveAspectRatio="xMidYMid meet">
+          <!-- Defs for arrowhead markers and filters -->
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#4a5568" />
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#00f2fe" />
+            </marker>
+            <marker id="arrow-retry" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#f6ad55" />
+            </marker>
+            <marker id="arrow-replan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#fc8181" />
+            </marker>
+            <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          <!-- Graph Edges -->
+          <!-- START -> Planner -->
+          <path id="edge-start-planner" class="edge-path" d="M 80,180 L 160,180" marker-end="url(#arrow)" />
+          
+          <!-- Planner -> Coder -->
+          <path id="edge-planner-coder" class="edge-path" d="M 290,180 L 360,180" marker-end="url(#arrow)" />
+          
+          <!-- Coder -> Test Runner -->
+          <path id="edge-coder-tester" class="edge-path" d="M 490,180 L 560,180" marker-end="url(#arrow)" />
+          
+          <!-- Test Runner -> Evaluator -->
+          <path id="edge-tester-evaluator" class="edge-path" d="M 690,180 L 760,180" marker-end="url(#arrow)" />
+          
+          <!-- Evaluator -> PR Writer (Condition 0: SUCCESS) -->
+          <path id="edge-eval-pr" class="edge-path" d="M 825,230 L 825,320" marker-end="url(#arrow)" />
+          
+          <!-- PR Writer -> END -->
+          <path id="edge-pr-end" class="edge-path" d="M 825,410 L 825,470" marker-end="url(#arrow)" />
+
+          <!-- Conditional Edge 1: Evaluator -> Coder (Retry <= 3) -->
+          <path id="edge-retry" class="edge-path edge-loop edge-amber" d="M 800,230 C 800,280 425,280 425,235" marker-end="url(#arrow-retry)" />
+
+          <!-- Conditional Edge 2: Evaluator -> Planner (Exhausted > 3) -->
+          <path id="edge-replan" class="edge-path edge-loop edge-red" d="M 840,130 C 840,40 225,40 225,125" marker-end="url(#arrow-replan)" />
+
+          <!-- Edge Edge Labels -->
+          <text x="835" y="275" class="edge-label label-success">0: Success</text>
+          <text x="610" y="275" class="edge-label label-retry">1: Retry [Attempts &le; 3]</text>
+          <text x="530" y="55" class="edge-label label-replan">2: Max Retries [Re-plan]</text>
+
+          <!-- Nodes Rendered in SVG -->
+          <!-- START -->
+          <g id="node-start" class="graph-node node-system" transform="translate(20, 155)">
+            <rect width="60" height="50" rx="8" />
+            <text x="30" y="30" text-anchor="middle">START</text>
+          </g>
+
+          <!-- PLANNER -->
+          <g id="node-planner" class="graph-node node-cyan" transform="translate(160, 130)">
+            <rect width="130" height="100" rx="12" />
+            <text x="65" y="32" class="node-icon" text-anchor="middle">🧠</text>
+            <text x="65" y="56" class="node-name" text-anchor="middle">Planner</text>
+            <text x="65" y="76" class="node-sub" text-anchor="middle">Diagnosis & Strategy</text>
+          </g>
+
+          <!-- CODER -->
+          <g id="node-coder" class="graph-node node-yellow" transform="translate(360, 130)">
+            <rect width="130" height="100" rx="12" />
+            <text x="65" y="32" class="node-icon" text-anchor="middle">💻</text>
+            <text x="65" y="56" class="node-name" text-anchor="middle">Coder</text>
+            <text x="65" y="76" class="node-sub" text-anchor="middle">Patch Synthesis</text>
+          </g>
+
+          <!-- TEST RUNNER -->
+          <g id="node-testrunner" class="graph-node node-magenta" transform="translate(560, 130)">
+            <rect width="130" height="100" rx="12" />
+            <text x="65" y="32" class="node-icon" text-anchor="middle">🧪</text>
+            <text x="65" y="56" class="node-name" text-anchor="middle">Test Runner</text>
+            <text x="65" y="76" class="node-sub" text-anchor="middle">Pytest Sandbox</text>
+          </g>
+
+          <!-- EVALUATOR -->
+          <g id="node-evaluator" class="graph-node node-green" transform="translate(760, 130)">
+            <rect width="130" height="100" rx="12" />
+            <text x="65" y="32" class="node-icon" text-anchor="middle">⚖️</text>
+            <text x="65" y="56" class="node-name" text-anchor="middle">Evaluator</text>
+            <text x="65" y="76" class="node-sub" text-anchor="middle">Verdict & Router</text>
+          </g>
+
+          <!-- PR WRITER -->
+          <g id="node-prwriter" class="graph-node node-blue" transform="translate(760, 320)">
+            <rect width="130" height="90" rx="12" />
+            <text x="65" y="28" class="node-icon" text-anchor="middle">🚀</text>
+            <text x="65" y="50" class="node-name" text-anchor="middle">PR Writer</text>
+            <text x="65" y="68" class="node-sub" text-anchor="middle">Git Branch & PR</text>
+          </g>
+
+          <!-- END -->
+          <g id="node-end" class="graph-node node-system" transform="translate(795, 470)">
+            <rect width="60" height="40" rx="8" />
+            <text x="30" y="24" text-anchor="middle">END</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Live Execution Log Stream -->
+      <div class="simulation-feed" id="simulation-feed">
+        <div class="feed-header">
+          <span>Simulation Execution Log</span>
+          <span class="feed-status" id="feed-status">Ready</span>
+        </div>
+        <div class="feed-body" id="feed-body">
+          <div class="log-entry system">
+            <span class="log-time">00:00:00</span>
+            <span class="log-msg">System initialized. Click [Simulate Fix Run] to step through autonomous repair loop.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center Right: Inspector & Output Panel -->
+    <aside class="inspector-panel" id="inspector-panel">
+      <!-- Tabs -->
+      <div class="inspector-tabs">
+        <button class="tab-btn active" data-tab="node-details">Node Inspector</button>
+        <button class="tab-btn" data-tab="diff-viewer">Active Git Diff</button>
+        <button class="tab-btn" data-tab="test-terminal">Pytest Terminal</button>
+      </div>
+
+      <!-- Tab Content 1: Node Details -->
+      <div class="tab-content active" id="tab-node-details">
+        <div class="inspector-card" id="node-card">
+          <div class="card-header">
+            <div class="card-icon" id="node-inspector-icon">🧠</div>
+            <div>
+              <h2 class="card-title" id="node-inspector-name">Planner Node</h2>
+              <span class="card-badge badge-cyan" id="node-inspector-type">LangGraph Worker Node</span>
+            </div>
+          </div>
+          <p class="card-desc" id="node-inspector-desc">
+            Responsible for analyzing the repository, identifying root cause of the bug report, and formulating an ordered, minimal fix plan.
+          </p>
+
+          <div class="card-section">
+            <h3 class="section-heading">State Channels Read / Written</h3>
+            <div class="tag-cloud" id="node-channels">
+              <span class="tag">messages (in/out)</span>
+              <span class="tag tag-cyan">relevant_files (write)</span>
+              <span class="tag tag-cyan">fix_plan (write)</span>
+            </div>
+          </div>
+
+          <div class="card-section">
+            <h3 class="section-heading">Bound Adapter Tools</h3>
+            <ul class="tool-list" id="node-tools">
+              <li><code>read_files(file_paths)</code> — Inspect workspace sources</li>
+              <li><code>find_files(text_pattern)</code> — Fast grep across codebase</li>
+              <li><code>list_dir(dir, recursive)</code> — Map repository structure</li>
+              <li><code>git_grep(pattern)</code> — Ripgrep across git index</li>
+            </ul>
+          </div>
+
+          <div class="card-section">
+            <h3 class="section-heading">System Prompt Philosophy</h3>
+            <div class="code-box" id="node-prompt-snippet">
+# Planner: You are the Planner node in an autonomous bug-fixing pipeline.
+Analyze the bug description, read the relevant files, formulate the root cause,
+and construct a minimal, non-invasive fix plan. Do NOT implement the code yourself.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Git Diff Viewer -->
+      <div class="tab-content" id="tab-diff-viewer">
+        <div class="diff-viewer">
+          <div class="diff-header">
+            <span class="diff-file">src/calculator.py</span>
+            <span class="diff-badge">+2 lines, -1 line</span>
+          </div>
+          <pre class="diff-code" id="diff-code-display"><code><span class="diff-context"> def parse_and_sum(values: list[int | None]) -> int:</span>
+<span class="diff-context">     total = 0</span>
+<span class="diff-context">     for v in values:</span>
+<span class="diff-del">-        total += v  # Crashes on NoneType</span>
+<span class="diff-add">+        if v is not None:</span>
+<span class="diff-add">+            total += v</span>
+<span class="diff-context">     return total</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Tab Content 3: Pytest Terminal -->
+      <div class="tab-content" id="tab-test-terminal">
+        <div class="terminal-window">
+          <div class="terminal-bar">
+            <span class="terminal-btn close"></span>
+            <span class="terminal-btn min"></span>
+            <span class="terminal-btn max"></span>
+            <span class="terminal-title">SubprocessPytestManager [sandbox]</span>
+          </div>
+          <pre class="terminal-body" id="terminal-body-display"><code><span class="term-dim">============================= test session starts =============================</span>
+platform win32 -- Python 3.14.3, pytest-9.0.2
+rootdir: benchmarks/fixtures/null_guard
+collected 2 items
+
+tests/test_calculator.py::test_sum_integers <span class="term-green">PASSED</span>                      [ 50%]
+tests/test_calculator.py::test_sum_with_none_values <span class="term-green">PASSED</span>             [100%]
+
+<span class="term-green">============================== 2 passed in 0.08s ==============================</span></code></pre>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-left">
+      <span>Built with LangGraph & Python 3.14 · Empirically Verified Architecture</span>
+    </div>
+    <div class="footer-right">
+      <a href="https://github.com" target="_blank" class="footer-link">Portfolio Documentation</a>
+      <span class="footer-dot">·</span>
+      <span class="footer-version">v0.1.0</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

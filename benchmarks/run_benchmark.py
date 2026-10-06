@@ -48,11 +48,29 @@ from constants import Status  # noqa: E402
 from utils.model_factory import get_model  # noqa: E402
 
 
-def run_task(task: dict) -> dict:
-    repo_path = Path(task["repo_path"]).resolve()
+def run_task(task: dict, base_dir: Path | None = None) -> dict:
+    import asyncio
+
+    raw_path = Path(task["repo_path"])
+    if not raw_path.is_absolute() and base_dir is not None:
+        repo_path = (base_dir / raw_path).resolve()
+    else:
+        repo_path = raw_path.resolve()
+
+    if not (repo_path / ".git").exists():
+        import subprocess
+
+        subprocess.run(["git", "init", "-b", "main"], cwd=repo_path, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "BenchmarkRunner"], cwd=repo_path, check=True)
+        subprocess.run(["git", "config", "user.email", "benchmark@bugsolver.dev"], cwd=repo_path, check=True)
+        subprocess.run(["git", "add", "."], cwd=repo_path, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial benchmark commit"], cwd=repo_path, check=True)
+
     target = task["bug"]
 
-    model = get_model()
+    provider = task.get("provider") or os.environ.get("BUGSOLVER_PROVIDER")
+    model_name = task.get("model") or os.environ.get("BUGSOLVER_MODEL")
+    model = get_model(provider=provider, model_name=model_name)
     config = {
         "configurable": {
             "model": model,
@@ -90,7 +108,7 @@ def run_task(task: dict) -> dict:
         "error": None,
     }
     try:
-        result = app.invoke(initial_state, config=config)
+        result = asyncio.run(app.ainvoke(initial_state, config=config))
         outcome["status"] = str(result.get("status"))
         outcome["retry_count"] = result.get("retry_count")
     except Exception as e:  # noqa: BLE001 - benchmark must not die on one task
@@ -122,7 +140,7 @@ def write_scorecard(results: list, out_dir: Path) -> None:
     for r in results:
         if r["error"]:
             lines += [f"### {r['name']}", "", "```", r["error"][-1500:], "```", ""]
-    (out_dir / "scorecard.md").write_text("\n".join(lines))
+    (out_dir / "scorecard.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:
@@ -133,19 +151,21 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    tasks = json.loads(Path(args.tasks).read_text())
+    task_file = Path(args.tasks).resolve()
+    tasks = json.loads(task_file.read_text(encoding="utf-8"))
+    base_dir = task_file.parent
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
     for i, task in enumerate(tasks, 1):
         print(f"[{i}/{len(tasks)}] {task['name']} ...", flush=True)
-        results.append(run_task(task))
+        results.append(run_task(task, base_dir=base_dir))
         print(f"    -> {results[-1]['status']} "
               f"({results[-1]['retry_count']} attempts, "
               f"{results[-1]['duration_s']}s)", flush=True)
 
-    (out_dir / "results.json").write_text(json.dumps(results, indent=2))
+    (out_dir / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     write_scorecard(results, out_dir)
     print(f"\nWrote {out_dir / 'results.json'} and {out_dir / 'scorecard.md'}")
 

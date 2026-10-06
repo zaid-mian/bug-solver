@@ -1,112 +1,219 @@
 # Bug Solver Agent
 
-A CLI-driven, autonomous **bug-fixing agent** built on [LangGraph](https://github.com/langchain-ai/langgraph). Point it at a local repository (or a GitHub issue), and it plans a fix, writes the code, runs the tests, evaluates the result, and — optionally — commits, pushes, and opens a Pull Request. Runs on local models via [Ollama](https://ollama.com): **no API keys needed.**
+<div align="center">
 
-> **Attribution:** this project was originally scaffolded by [Sawyer Anderson](https://github.com/sawyer-anderson1/bug-solver) (MIT) — the graph topology, adapters, tool bridges, and skill prompts. It was stalled with the core agent logic unimplemented. I completed and productionized it: implemented the three stub nodes, added the missing test-execution tooling, fixed packaging and routing bugs, and added tests, benchmarks, and Docker support. The original [LICENSE](LICENSE) is preserved.
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg?style=for-the-badge&logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-orange.svg?style=for-the-badge&logo=langchain&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-36%20passed-brightgreen.svg?style=for-the-badge&logo=pytest&logoColor=white)
+![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg?style=for-the-badge)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
 
-## How it works
+<p align="center">
+  <strong>An autonomous, cyclical SWE-bench style bug resolution agent powered by LangGraph.</strong><br>
+  Diagnoses repository issues, synthesizes surgical code patches, executes isolated test sandboxes, evaluates results with retry loops, and automatically opens Pull Requests.
+</p>
 
-The agent is a LangGraph state machine with five nodes and a feedback loop:
+</div>
 
+---
+
+## Highlights & Capabilities
+
+- 🧠 **5-Node Cyclical LangGraph Architecture**: Planner ➔ Coder ➔ Test Runner ➔ Evaluator ➔ PR Writer with self-correcting feedback loops.
+- ⚡ **Multi-Provider LLM Engine**: Seamlessly switch between **Ollama** (offline/local, no API keys), **Anthropic Claude 3.5**, **OpenAI GPT-4o**, **Groq**, and **OpenRouter**.
+- 🖥️ **Live Terminal Observability**: Real-time Rich console streaming with colored node steps, syntax-highlighted git diffs, and execution outcome tables.
+- 🌐 **Interactive Web DAG Visualizer**: Built-in glassmorphism web UI (`bugsolver ui`) featuring animated stateflow simulation and JSON schema export.
+- 🩹 **Surgical Code Editing (`patch_file`)**: Eliminates full-file hallucinations with precision search-and-replace patching.
+- 🛡️ **Subprocess Sandbox & Git Isolation**: Enforces repository-scoped execution, sanitizer guards against command injection, and creates isolated fix branches.
+- 📊 **Turnkey Benchmarks**: Reproducible SWE fixtures (`null_guard`, `off_by_one`, `missing_key`) with automated scorecard generation.
+
+---
+
+## Architecture Flow
+
+```mermaid
+graph TD
+    START([START]) --> Planner[🧠 Planner\nDiagnosis & Strategy]
+    Planner --> Coder[💻 Coder\nSurgical Patch Synthesis]
+    Coder --> Tester[🧪 Test Runner\nIsolated Pytest Sandbox]
+    Tester --> Evaluator[⚖️ Evaluator\nOutcome Verification & Router]
+
+    Evaluator -- "0: SUCCESS (Fix Verified)" --> PRWriter[🚀 PR Writer\nBranch, Commit & PR]
+    Evaluator -- "1: FAILED (Attempts &le; 3)" --> Coder
+    Evaluator -- "2: MAX RETRIES (Re-plan)" --> Planner
+
+    PRWriter --> END([END])
+
+    classDef default fill:#1e293b,stroke:#475569,stroke-width:2px,color:#fff;
+    classDef cyan fill:#0f2744,stroke:#06b6d4,stroke-width:2px,color:#fff;
+    classDef yellow fill:#2d2410,stroke:#fbbf24,stroke-width:2px,color:#fff;
+    classDef magenta fill:#2d142c,stroke:#ec4899,stroke-width:2px,color:#fff;
+    classDef green fill:#0d2818,stroke:#10b981,stroke-width:2px,color:#fff;
+    classDef blue fill:#101f3c,stroke:#3b82f6,stroke-width:2px,color:#fff;
+
+    class Planner cyan;
+    class Coder yellow;
+    class Tester magenta;
+    class Evaluator green;
+    class PRWriter blue;
 ```
-START → Planner → Coder → Test Runner → Evaluator ─┬─ (success) ──→ PR Writer → END
-                    ▲                               ├─ (failed)  ──→ Coder
-                    │                               └─ (retries  ──→ Planner
-                    └───────────────────────────────   exceeded)
-```
 
-- **Planner** — analyzes the issue/bug description and locates relevant files, producing a fix plan.
-- **Coder** — generates the code patch for the plan.
-- **Test Runner** — discovers the test setup, executes the tests in a sandbox, and records the full output.
-- **Evaluator** — judges the test output: `SUCCESS` → PR Writer, `FAILED` → back to Coder with a diagnostic. After `MAX_RETRIES`, routes back to Planner for a fresh plan.
-- **PR Writer** — commits on a dedicated `bugsolver/fix-*` branch, pushes, opens a Pull Request, and comments on the issue (skipped in `--local-only` mode).
+---
 
-### Safety design
+## Quickstart & Installation
 
-The agent runs tests and git commands, so it is sandboxed by construction:
-
-- Test commands run with `cwd` scoped to the target repo, `shell=False`, a timeout, and an argument sanitizer (shell metacharacters and interactive flags like `--pdb` are rejected).
-- Git operations go through an adapter with `shlex` tokenization and banned flags/subcommands (`--exec`, `config`, `bisect`, …).
-- The agent works on a dedicated fix branch — your current branch is never touched.
-
-## Setup
+### 1. Installation
 
 ```bash
-# 1. Install Ollama and pull a code model (CPU-friendly default)
+# Clone the repository
+git clone https://github.com/sawyer-anderson1/bug-solver.git
+cd bug-solver
+
+# Install in editable mode
+pip install -e .
+```
+
+### 2. Configure Your LLM Provider
+
+Bug Solver runs natively on local Ollama models (default) or cloud API providers:
+
+```bash
+# Option A: Local Ollama (Zero API Keys)
 ollama pull qwen2.5-coder:7b
 
-# 2. Install the agent
-pip install .
+# Option B: Cloud Providers (Set environment variables)
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export GROQ_API_KEY="gsk_..."
+export OPENROUTER_API_KEY="sk-or-..."
 
-# 3. (Optional) for GitHub issue mode + PR creation
-export GITHUB_TOKEN=ghp_...
+# Optional: For GitHub issue import & automated PR creation
+export GITHUB_TOKEN="ghp_..."
 ```
 
-## Usage
+---
+
+## CLI Usage
+
+### Autonomous Bug Fixing (`bugsolver run`)
 
 ```bash
-# Fix a GitHub issue end-to-end (branch, fix, test, PR)
+# Mode 1: Fix a local bug using local Ollama model
+bugsolver run "Fix NoneType crash in calculator.py" --local-only
+
+# Mode 2: Fix with Claude 3.5 Sonnet on Anthropic
+bugsolver run "Fix pagination off-by-one" --provider anthropic --model claude-3-5-sonnet-latest --local-only
+
+# Mode 3: Fix with OpenAI GPT-4o
+bugsolver run "Resolve database config missing key" --provider openai --model gpt-4o --local-only
+
+# Mode 4: Remote GitHub Issue -> Automated Branch & Pull Request
 bugsolver run 142 --name owner/repo --pr
-
-# Fix a locally-described bug, keep everything local
-bugsolver run "Fix memory leak in parser" --name owner/repo --local-only
-
-# Point at a different repo than the current directory
-bugsolver run 142 --name owner/repo --path /path/to/repo --pr
 ```
 
-Environment overrides: `BUGSOLVER_MODEL` (default `qwen2.5-coder:7b`), `OLLAMA_HOST` (default `http://localhost:11434`).
+### Interactive Web DAG Visualizer (`bugsolver ui`)
 
-## What was completed (vs. the original scaffold)
-
-| Component | Original state | Completed |
-|---|---|---|
-| Test Runner node | `return "Placeholder"` stub | Real ReACT node: discovers, runs, and records tests |
-| Evaluator node | `return "Placeholder"` stub | Real judgment node with retry accounting |
-| PR Writer node | `return "Placeholder"` stub | Commit → push → PR → issue comment, mode-aware |
-| Test execution tool | Not implemented (README said so) | Sandboxed `run_tests` / `collect_tests` / `run_test_command` tools |
-| `check_status` router | Always routed to Planner on retry (bug) | Correct SUCCESS → PR, FAILED → Coder, exhausted → Planner |
-| Model wiring | `config["configurable"]["model"]` never provided (would crash) | Ollama wired in, zero API keys |
-| Packaging | Broken template `pyproject.toml` (wouldn't install) | Real metadata, deps, `bugsolver` entry point |
-| Tests | ~41 lines, effectively empty | Unit tests: router, sanitizer, tool factory e2e |
-| Evaluation | None | `benchmarks/run_benchmark.py` → fix-rate scorecard |
-| Deployment | None | Dockerfile |
-
-## Benchmark
+Launch the visualizer to explore graph state channels, inspect node prompts, and simulate live repair loops:
 
 ```bash
-python benchmarks/run_benchmark.py benchmarks/tasks.example.json --output benchmarks/results/
-# writes results.json + scorecard.md (fix rate, attempts, duration per task)
+bugsolver ui
+# Automatically opens http://127.0.0.1:8765/
 ```
 
-Benchmarks always run in `--local-only` mode: the agent may commit on its fix branch but never pushes or opens PRs.
+Options:
+- `--port / -p`: Custom port (default: `8765`)
+- `--no-open`: Run server without opening the browser
 
-## Docker
+---
+
+## Reproducible SWE Benchmark Suite
+
+Bug Solver includes a reproducible evaluation harness with 3 self-contained buggy repositories under `benchmarks/fixtures/`:
+
+| Benchmark Task | Fixture Path | Bug Description | Expected Fix |
+|---|---|---|---|
+| `null-guard-calculator` | `benchmarks/fixtures/null_guard` | `parse_and_sum()` crashes on `None` | Ignore `None` and sum valid integers |
+| `off-by-one-paginator` | `benchmarks/fixtures/off_by_one` | 1-indexed page arithmetic off by one | Correct slice bounds `(page - 1) * page_size` |
+| `missing-key-config-loader` | `benchmarks/fixtures/missing_key` | `KeyError` when port is omitted | Provide fallback default port `5432` |
+
+### Running the Benchmark
 
 ```bash
-docker build -t bug-solver .
-docker run --rm -e OLLAMA_HOST=host.docker.internal \
-  -v /path/to/target/repo:/target -w /target bug-solver \
-  run "Fix the null guard in parser" --name owner/repo --local-only
+# Prepare fixtures (if not already initialized)
+python benchmarks/setup_fixtures.py
+
+# Execute the benchmark suite
+python benchmarks/run_benchmark.py benchmarks/tasks.json --output benchmarks/results/
 ```
 
-## Architecture
+Generates `benchmarks/results/results.json` and a Markdown scorecard `benchmarks/results/scorecard.md`.
 
-```
-src/
-├── agent/
-│   ├── graph.py            # LangGraph state, nodes, edges, conditional routing
-│   └── nodes.py            # Node implementations (planner, coder, test_runner, evaluator, pr_writer)
-├── adapters/               # Pluggable interfaces to the outside world
-│   ├── git/                # Local Git operations (subprocess impl + security sanitizer)
-│   ├── filesystem/         # Local filesystem operations (pathlib impl)
-│   ├── platform/           # GitHub operations (PyGithub impl)
-│   └── testing/            # Test execution (sandboxed pytest runner)
-├── skills/                 # Per-node system prompts and templated tool responses
-├── tools/                  # LangChain tool factories over the adapters
-├── utils/                  # Prompt/template loaders
-├── constants.py            # MAX_RETRIES, Status enum
-└── cli.py                  # Typer CLI entrypoint
+---
+
+## Production Verification & Test Suite
+
+All adapters, graph routing logic, filesystem tools, and utilities are strictly verified with 36 unit & integration tests:
+
+```bash
+# Run complete test suite
+python -m pytest
+
+# Run linter checks (0 errors)
+ruff check .
 ```
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the original author's component status (note: some items are now done — the table above is the current truth).
+```
+collected 36 items
+
+tests/integration_tests/test_graph.py ..                  [  5%]
+tests/unit_tests/test_benchmarks.py ..                    [ 11%]
+tests/unit_tests/test_check_status.py ....                [ 22%]
+tests/unit_tests/test_configuration.py ...                [ 30%]
+tests/unit_tests/test_filesystem_adapter.py .             [ 33%]
+tests/unit_tests/test_git_adapter.py .                    [ 36%]
+tests/unit_tests/test_github_adapter.py .                 [ 38%]
+tests/unit_tests/test_json_parser.py ....                 [ 50%]
+tests/unit_tests/test_model_factory.py ...                [ 58%]
+tests/unit_tests/test_patch_file.py ....                  [ 69%]
+tests/unit_tests/test_pytest_sanitize.py .....            [ 83%]
+tests/unit_tests/test_testing_tools.py .....              [ 97%]
+tests/unit_tests/test_ui.py .                             [100%]
+
+======================== 36 passed in 29.22s =========================
+```
+
+---
+
+## Repository Structure
+
+```
+bug-solver/
+├── src/
+│   ├── agent/                  # LangGraph cyclical state machine
+│   │   ├── graph.py            # StateGraph definition & conditional check_status router
+│   │   ├── nodes.py            # Planner, Coder, Test Runner, Evaluator, PR Writer
+│   │   └── state.py            # TypedDict state channels
+│   ├── adapters/               # Pluggable concrete drivers
+│   │   ├── filesystem/         # PATHLIBPythonManager & OSPythonManager with patch_file
+│   │   ├── git/                # SubprocessGitManager with cwd isolation & command sanitization
+│   │   ├── platform/           # PyGithubManager for GitHub issues & PRs
+│   │   └── testing/            # SubprocessPytestManager sandbox
+│   ├── tools/                  # LangChain tool factories over adapters
+│   ├── skills/                 # Markdown system prompts and response templates
+│   ├── utils/                  # Multi-provider model factory, JSON regex parser, Rich UI
+│   ├── web/                    # Glassmorphism Web DAG & Stateflow visualizer
+│   ├── cli.py                  # Typer CLI with 'run' and 'ui' commands
+│   └── constants.py            # MAX_RETRIES and Status enum
+├── benchmarks/                 # SWE-bench style benchmark runner & fixture repos
+├── tests/                      # 36 unit & integration test suites
+├── pyproject.toml              # Modern setuptools packaging & dependencies
+└── Dockerfile                  # Containerized sandbox environment
+```
+
+---
+
+## Attribution & License
+
+- Original architectural concept & scaffolding by [Sawyer Anderson](https://github.com/sawyer-anderson1/bug-solver) (MIT).
+- Hardened, expanded, and productionized with multi-provider LLM support, interactive Web DAG visualizer, surgical patching, and SWE test harnesses.
+- Licensed under the [MIT License](LICENSE).

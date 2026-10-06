@@ -259,5 +259,41 @@ def run(
     )
 
 
+@cli.command()
+def ui(
+    port: Annotated[
+        int, typer.Option("--port", "-p", help="Port to serve the interactive web visualizer.")
+    ] = 8765,
+    no_open: Annotated[
+        bool, typer.Option("--no-open", help="Do not automatically open the browser.")
+    ] = False,
+):
+    """Launch the interactive Web DAG & Stateflow Visualizer in your browser."""
+    import functools
+    import http.server
+    import webbrowser
+
+    from rich.console import Console
+
+    console = Console()
+    web_dir = Path(__file__).resolve().parent / "web"
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(web_dir))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+
+    url = f"http://127.0.0.1:{port}/"
+    console.print(
+        f"[bold cyan]⚡ BugSolver Web DAG Visualizer running at:[/bold cyan] [bold underline green]{url}[/bold underline green]"
+    )
+    console.print("[dim]Press Ctrl+C to stop the server.[/dim]")
+
+    if not no_open:
+        webbrowser.open(url)
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped.[/yellow]")
+
+
 if __name__ == "__main__":
     cli()

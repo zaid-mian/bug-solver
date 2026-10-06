@@ -1,0 +1,20 @@
+[
+  {
+    "name": "null-guard-calculator",
+    "repo_path": "benchmarks/fixtures/null_guard",
+    "bug": "src/calculator.py crashes with TypeError when values contain None. Ignore None entries and sum valid numbers.",
+    "notes": "Regression where parse_and_sum([1, None, 3, None]) fails"
+  },
+  {
+    "name": "off-by-one-paginator",
+    "repo_path": "benchmarks/fixtures/off_by_one",
+    "bug": "src/paginator.py has an off-by-one calculation for 1-indexed page slices. Fix start index arithmetic.",
+    "notes": "Pagination calculation fix"
+  },
+  {
+    "name": "missing-key-config-loader",
+    "repo_path": "benchmarks/fixtures/missing_key",
+    "bug": "src/config_loader.py raises KeyError if port is omitted. Provide a default fallback port of 5432.",
+    "notes": "Missing default port dictionary lookup"
+  }
+]
