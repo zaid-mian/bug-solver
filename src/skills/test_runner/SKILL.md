@@ -22,12 +22,17 @@ The following information is available in your conversation context:
 
 ### 3. Run the tests
 
-> **Current limitation:** The only available execution tool is `git_fallback`, which runs `git` subcommands only — it cannot invoke arbitrary shell commands such as `pytest` or `npm test`. A dedicated shell-execution tool has not yet been implemented.
+You have real test-execution tools — use them:
 
-Until a shell tool is available, do the following:
-- Document in `test_output` exactly which test command should be run (e.g., `pytest tests/ -v --tb=short`), the test framework and version detected, and the test files that exercise the changed code.
-- Use `read_files` to manually inspect the most relevant test files and check whether the test assertions are consistent with the fix that was applied.
-- Provide a **provisional verdict** in `test_output`: either "Tests appear consistent with the fix — no assertion mismatches found on inspection" or a description of any test that looks like it would fail and why.
+- Start with `collect_tests` to discover what tests exist (cheap, no side effects).
+- Then run the relevant tests with `run_tests` (pass the specific test files that
+  exercise the changed code first, then broaden if they pass).
+- Use `run_test_command` for anything the other two cannot express, e.g.
+  `run_test_command("tests/test_api.py -x -q")`. The command is sanitized and
+  always runs inside the target repository with a timeout — shell metacharacters
+  and interactive flags are rejected.
+- If no tests exist for the changed code, say so explicitly in `test_output` and
+  fall back to a careful manual inspection with `read_files`.
 
 ### 4. Record the results
 Set `test_output` to the full test output (once a shell tool is available) or the provisional inspection report (until then). Include file names, test names, and the nature of any failures.
@@ -50,10 +55,10 @@ Set `test_output` to the full test output (once a shell tool is available) or th
 
 ## Final output format
 
-When you have finished inspecting or running tests, emit a single JSON object as your final message. No markdown fences, no prose -- just the raw JSON.
+When you have finished running (or inspecting) tests, emit a single JSON object as your final message. No markdown fences, no prose -- just the raw JSON.
 
 {
-  "test_output": "<full test output or provisional inspection report>"
+  "test_output": "<full test output, including file names, test names, and the nature of any failures>"
 }
 
-If the output is provisional (no shell tool available), prefix the string with PROVISIONAL: so the Evaluator knows.
+Capture the full output — do not truncate tracebacks or error messages (the tool already caps pathological output for you).
