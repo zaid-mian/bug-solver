@@ -1,0 +1,1 @@
+[{"bug":"parser.py crashes with TypeError when parse() receives empty input. Add a guard that returns an empty result instead.","name":"example-null-guard","notes":"Copy a small target repo to /tmp/demo-target before running. The agent will discover and run its tests.","repo_path":"/tmp/demo-target"}]
