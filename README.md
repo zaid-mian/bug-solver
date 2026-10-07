@@ -5,36 +5,33 @@
 [![GitHub](https://img.shields.io/badge/GitHub-zaid--mian%2Fbug--solver-181717.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/zaid-mian/bug-solver)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-FF6F00.svg?style=for-the-badge&logo=langchain&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-36%20passed-22c55e.svg?style=for-the-badge&logo=pytest&logoColor=white)
+![Pytest](https://img.shields.io/badge/pytest-36%20passed-22c55e.svg?style=for-the-badge&logo=pytest&logoColor=white)
 ![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg?style=for-the-badge&logo=ruff&logoColor=white)
 ![Local First](https://img.shields.io/badge/offline-Ollama%20Native-blueviolet.svg?style=for-the-badge&logo=ollama&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-F59E0B.svg?style=for-the-badge)
 
 <p align="center">
-  <strong>An autonomous, cyclical SWE-bench repair loop powered by LangGraph.</strong><br>
+  <strong>An autonomous, cyclical bug-fixing agent powered by LangGraph.</strong><br>
   Diagnoses repository bugs, applies surgical patches, verifies in isolated subprocess test sandboxes,<br>
   self-heals through iterative feedback loops, and opens verified GitHub Pull Requests.
 </p>
 
-[Quickstart](#-quickstart--installation) · [Architecture Flow](#-architecture-flow) · [Live Terminal](#-live-terminal-experience) · [Web Visualizer](#-interactive-web-dag-visualizer) · [CLI Showcase](#-cli-usage) · [SWE Benchmarks](#-reproducible-swe-benchmarks) · [Extensibility](#-pluggable-adapter-architecture)
+[Quickstart](#-quickstart--installation) · [Architecture Flow](#-architecture-flow) · [Live Terminal](#-live-terminal-experience) · [Web Visualizer](#-interactive-web-dag-visualizer) · [CLI Usage](#-cli-usage) · [Evaluation Fixtures](#-turnkey-evaluation-fixtures) · [Extensibility](#-pluggable-adapter-architecture)
 
 </div>
 
 ---
 
-## ⚡ Why BugSolver? (Architectural Differentiators)
+## ⚙️ Core Architecture & Engineering Highlights
 
-Most AI coding assistants operate as single-turn auto-completes: they guess code, offer no test verification, and frequently hallucinate missing imports or truncate long files. **BugSolver** is engineered as an autonomous agentic repair system:
+BugSolver is an autonomous multi-node agent designed to resolve software bugs through iterative feedback loops, precision code editing, and test verification:
 
-| Capability | Standard LLM Copilots | SWE-Agent / Devin (Cloud) | **BugSolver Agent** |
-|---|:---:|:---:|:---:|
-| **Self-Healing Loop** | ❌ No (Single guess) | ✅ Cloud only ($$$) | ✅ **5-Node Cyclical Feedback Loop** |
-| **Sandbox Test Verification** | ❌ No | ✅ Proprietary | ✅ **SubprocessPytestManager with sanitization** |
-| **Local / Air-Gapped Execution** | ❌ Requires Cloud | ❌ Cloud SaaS Only | ✅ **Native Ollama (`qwen2.5-coder:7b`), 0 API keys** |
-| **Multi-Provider Cloud LLMs** | ⚠️ Tied to vendor | ⚠️ Fixed models | ✅ **Anthropic, OpenAI, Groq, OpenRouter** |
-| **Surgical Patching** | ❌ Rewrites entire file | ⚠️ Diff patches | ✅ **`patch_file` search-and-replace tool** |
-| **Terminal Observability** | ❌ Plain stdout | ❌ Browser SaaS | ✅ **Rich live cards, syntax diffs & scorecards** |
-| **Interactive Web Topology** | ❌ No | ⚠️ Generic web UI | ✅ **Built-in Web DAG Visualizer (`bugsolver ui`)** |
+- 🔄 **5-Node Cyclical State Machine**: Orchestrated via LangGraph across diagnosis (`Planner`), surgical editing (`Coder`), isolated sandboxing (`Test Runner`), outcome verification (`Evaluator`), and VCS delivery (`PR Writer`).
+- 🎯 **Surgical Code Patching (`patch_file`)**: Targets exact search-and-replace line ranges rather than destructive whole-file overwrites, preserving existing codebase formatting and indentation.
+- 🧪 **Subprocess Sandbox Isolation**: `SubprocessPytestManager` strictly scopes test discovery and execution to the target directory with CLI argument sanitization (blocking dangerous flags and shell injection).
+- 🔁 **Self-Healing Error Recovery**: On test failures, the Evaluator feeds pytest tracebacks and stdout/stderr back into the Coder for targeted retries (up to 3 attempts) before falling back to re-planning.
+- 💻 **Local-First & Multi-Provider Support**: Runs completely offline and free with local Ollama (`qwen2.5-coder:7b`) with zero external API keys, or connects to frontier cloud models (Claude 3.5 Sonnet, GPT-4o, Groq).
+- 🖥️ **Full Observability**: Live terminal streaming with Rich status cards and syntax diffs, plus a built-in browser-based DAG visualizer (`bugsolver ui`).
 
 ---
 
@@ -101,7 +98,7 @@ When running `bugsolver run`, the CLI streams real-time state transitions throug
 
 ```text
 ╭──────────────────────────────────────────────────────────────────────────╮
-│ ⚡ BUG SOLVER AGENT — Autonomous SWE-bench Repair Loop                   │
+│ ⚡ BUG SOLVER AGENT — Autonomous Cyclical Repair Loop                   │
 │ Repository: ./benchmarks/fixtures/null_guard                             │
 │ Provider: ollama  Model: qwen2.5-coder:7b  Mode: Local (No Push/PR)      │
 ╰──────────────────────────────────────────────────────────────────────────╯
@@ -243,35 +240,29 @@ bugsolver run 142 --name owner/repo --pr
 
 ---
 
-## 📊 Reproducible SWE Benchmarks
+## 📊 Turnkey Evaluation Fixtures
 
-BugSolver includes 3 turnkey, self-contained benchmark repositories in `benchmarks/fixtures/` with an automated evaluation runner:
+BugSolver includes 3 self-contained, reproducible test fixtures in `benchmarks/fixtures/` to systematically evaluate the agent's end-to-end bug fixing loop:
 
-| Benchmark Task | Fixture Path | Injected Bug | Validation Test | Expected Agent Resolution |
+| Fixture Task | Fixture Path | Injected Bug | Validation Test | Expected Resolution |
 |---|---|---|---|---|
-| `null-guard-calculator` | `benchmarks/fixtures/null_guard` | `parse_and_sum()` crashes on `None` | `test_calculator.py` | Add null filter check before summation |
-| `off-by-one-paginator` | `benchmarks/fixtures/off_by_one` | 1-indexed pagination arithmetic error | `test_paginator.py` | Correct slice index bounds `(page - 1) * size` |
-| `missing-key-config-loader` | `benchmarks/fixtures/missing_key` | Unhandled `KeyError` on optional dict key | `test_config_loader.py` | Fallback default port `5432` lookup |
+| `null-guard-calculator` | `benchmarks/fixtures/null_guard` | `parse_and_sum()` raises `TypeError` on `None` items | `test_calculator.py` | Add null filter check before accumulation |
+| `off-by-one-paginator` | `benchmarks/fixtures/off_by_one` | 1-indexed pagination slice boundary calculation error | `test_paginator.py` | Correct slice index bounds `(page - 1) * size` |
+| `missing-key-config-loader` | `benchmarks/fixtures/missing_key` | Unhandled `KeyError` on optional dict configuration | `test_config_loader.py` | Fallback to default port (`5432`) |
 
-### Running the Benchmark Suite
+### Running the Evaluation Harness
+
+You can run the automated evaluation harness across all fixture repositories with a single command:
 
 ```bash
-# Run benchmark across all tasks
+# Run benchmark harness across all fixture tasks
 python benchmarks/run_benchmark.py benchmarks/tasks.json --output benchmarks/results/
 ```
 
-### Empirical Results Scorecard
-
-```markdown
-# bug-solver benchmark scorecard
-**Fix rate: 3/3 (100%)**
-
-| Task | Status | Attempts | Duration (s) |
-|---|:---:|:---:|:---:|
-| null-guard-calculator | SUCCESS | 0 | 4.2s |
-| off-by-one-paginator | SUCCESS | 0 | 3.8s |
-| missing-key-config-loader | SUCCESS | 0 | 4.5s |
-```
+### Evaluation Protocol
+1. **Pre-Run Verification**: The test suite is executed on the unmodified fixture to verify that the injected bug causes a deterministic test failure.
+2. **Autonomous Graph Execution**: BugSolver is invoked to diagnose the codebase, synthesize targeted code patches, and run isolated tests in a subprocess.
+3. **Verification & Audit**: The harness verifies that all tests pass cleanly after patching and writes structured JSON execution metrics to `benchmarks/results/`.
 
 ---
 
@@ -366,5 +357,5 @@ docker run --rm -e OLLAMA_HOST=host.docker.internal \
 - Author & Maintainer: **Muhammad Zaid Tahir** ([@zaid-mian](https://github.com/zaid-mian)).
 - Repository: [https://github.com/zaid-mian/bug-solver](https://github.com/zaid-mian/bug-solver)
 - Foundational architectural scaffolding by [Sawyer Anderson](https://github.com/sawyer-anderson1/bug-solver) (MIT).
-- Hardened and productionized into a complete autonomous SWE-bench repair loop with multi-provider LLM support, interactive Web DAG visualizer, surgical `patch_file` edits, and turnkey benchmark suites.
+- Hardened and productionized into a complete autonomous bug repair loop with multi-provider LLM support, interactive Web DAG visualizer, surgical `patch_file` edits, and turnkey benchmark suites.
 - Released under the [MIT License](LICENSE).
